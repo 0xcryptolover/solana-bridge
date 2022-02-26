@@ -7,7 +7,6 @@ use solana_program::{
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
     sysvar::{rent::Rent, Sysvar},
-    system_instruction,
 };
 
 use spl_token::state::Account as TokenAccount;
@@ -105,8 +104,6 @@ impl Processor {
         Ok(())
     }
 
-    //todo: transfer sol to vault bridge
-
     // add logic to proccess unshield for users
     fn process_unshield(
         accounts: &[AccountInfo],
@@ -123,7 +120,28 @@ impl Processor {
         init_beacon_info: IncognitoProxy,
         program_id: &Pubkey,
     ) -> ProgramResult {
-        
+        let account_info_iter = &mut accounts.iter();
+        let initalizer = next_account_info(account_info_iter)?;
+
+        if !initalizer.is_signer {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+        let incognito_proxy = next_account_info(account_info_iter)?;
+        if incognito_proxy.owner != program_id {
+            msg!("Invalid incognito proxy");
+            return Err(ProgramError::IncorrectProgramId);
+        }
+        let mut incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
+        if incognito_proxy_info.is_initialized() {
+            msg!("Beacon initialized");
+            return Err(BridgeError::BeaconsInitialized.into());
+        }
+        incognito_proxy_info.is_initialized =  init_beacon_info.is_initialized;
+        incognito_proxy_info.bump_seed =  init_beacon_info.bump_seed;
+        incognito_proxy_info.vault =  init_beacon_info.vault;
+        incognito_proxy_info.beacons =  init_beacon_info.beacons;
+        IncognitoProxy::pack(incognito_proxy_info, &mut incognito_proxy.data.borrow_mut())?;
+
         Ok(())
     }
 }

@@ -42,7 +42,7 @@ impl BridgeInstruction {
         Ok(match tag {
             0 => {
                 let (amount, rest) = Self::unpack_u64(rest)?;
-                let (inc_address, rest) = Self::unpack_str(rest, 148)?;
+                let (inc_address, _) = Self::unpack_str(rest, 148)?;
                 Self::Shield {
                     amount,
                     inc_address
@@ -52,30 +52,34 @@ impl BridgeInstruction {
                 let (inst_len, rest) = Self::unpack_u8(rest)?;
                 let (inst, rest) =  Self::unpack_str(rest, inst_len as usize)?;
                 let (height, rest) = Self::unpack_u64(rest)?;
-                let (inst_paths_len, rest) = Self::unpack_u8(rest)?;
+                let (inst_paths_len,mut rest) = Self::unpack_u8(rest)?;
                 let mut inst_paths = Vec::with_capacity(inst_paths_len as usize + 1);
                 for _ in 0..inst_paths_len {
-                    let (inst_node, rest) = Self::unpack_bytes32(rest)?;
+                    let (inst_node, rest_) = Self::unpack_bytes32(rest)?;
+                    rest = rest_;
                     inst_paths.push(*inst_node);
                 }
-                let (inst_paths_is_left_len, rest) = Self::unpack_u8(rest)?;
+                let (inst_paths_is_left_len,mut rest) = Self::unpack_u8(rest)?;
                 let mut inst_path_is_lefts = Vec::with_capacity(inst_paths_is_left_len as usize + 1);
                 for _ in 0..inst_paths_is_left_len {
-                    let (inst_paths_is_left, rest) = Self::unpack_bool(rest)?;
+                    let (inst_paths_is_left, rest_) = Self::unpack_bool(rest)?;
+                    rest = rest_;
                     inst_path_is_lefts.push(inst_paths_is_left);
                 }
                 let (inst_root, rest) = Self::unpack_bytes32(rest)?;
                 let (blk_data, rest) = Self::unpack_bytes32(rest)?;
-                let (indexes_len, rest) = Self::unpack_u8(rest)?;
+                let (indexes_len,mut rest) = Self::unpack_u8(rest)?;
                 let mut indexes = Vec::with_capacity(indexes_len as usize + 1);
                 for _ in 0..indexes_len {
-                    let (index, rest) = Self::unpack_u8(rest)?;
+                    let (index, rest_) = Self::unpack_u8(rest)?;
+                    rest = rest_;
                     indexes.push(index);
                 }
-                let (signature_len, rest) = Self::unpack_u8(rest)?;
+                let (signature_len,mut rest) = Self::unpack_u8(rest)?;
                 let mut signatures = Vec::with_capacity(signature_len as usize + 1);
                 for _ in 0..signature_len {
-                    let (signature, rest) = Self::unpack_bytes65(rest)?;
+                    let (signature, rest_) = Self::unpack_bytes65(rest)?;
+                    rest = rest_;
                     signatures.push(*signature);
                 }
                 Self::UnShield {
