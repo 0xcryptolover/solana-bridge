@@ -104,6 +104,12 @@ impl Processor {
         Ok(())
     }
 
+    /// [x] declare vars
+    /// [ ] extract info from input params
+    /// [ ] verify beacon signatures
+    /// [ ] verify instruction merkle tree
+    /// [x] transfer token back to user
+
     // add logic to proccess unshield for users
     fn process_unshield(
         accounts: &[AccountInfo],
