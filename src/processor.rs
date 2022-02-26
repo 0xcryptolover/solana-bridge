@@ -11,7 +11,7 @@ use solana_program::{
 
 use spl_token::state::Account as TokenAccount;
 
-use crate::{error::BridgeError, instruction::BridgeInstruction, state::Withdraw};
+use crate::{error::BridgeError, instruction::BridgeInstruction, state::{Withdraw, UnshieldRequest, IncognitoProxy}};
 
 pub struct Processor;
 impl Processor {
@@ -27,16 +27,16 @@ impl Processor {
                 msg!("Instruction: Shield");
                 Self::process_shield(accounts, amount, inc_address, program_id)
             }
-            BridgeInstruction::UnShield { amount, unshield_info } => {
+            BridgeInstruction::UnShield { unshield_info } => {
                 msg!("Instruction: Unshield");
-                Self::process_exchange(accounts, amount, unshield_info, program_id)
+                Self::process_unshield(accounts, unshield_info, program_id)
+            }
+            BridgeInstruction::InitBeacon { init_beacon_info } => {
+                msg!("Instruction: init beacon list");
+                Self::process_init_beacon(accounts, init_beacon_info, program_id)      
             }
         }
     }
-
-    // todo: 
-    // [x] transfer token to the vault account
-    // [ ]
 
     fn process_shield(
         accounts: &[AccountInfo],
@@ -86,6 +86,26 @@ impl Processor {
 
     //todo: transfer sol to vault bridge
 
+    // add logic to proccess unshield for users
+    fn process_unshield(
+        accounts: &[AccountInfo],
+        unshield_info: UnshieldRequest,
+        program_id: &Pubkey,
+    ) -> ProgramResult {
+
+        Ok(())
+    }
+
+    // add logic to proccess init beacon list
+    fn process_init_beacon(
+        accounts: &[AccountInfo],
+        init_beacon_info: IncognitoProxy,
+        program_id: &Pubkey,
+    ) -> ProgramResult {
+        
+        Ok(())
+    }
+
     // check rent exempt
     fn assert_rent_exempt(rent: &Rent, account_info: &AccountInfo) -> ProgramResult {
         if !rent.is_exempt(account_info.lamports(), account_info.data_len()) {
@@ -94,7 +114,7 @@ impl Processor {
                 &account_info.lamports().to_string(),
                 &rent.minimum_balance(account_info.data_len()).to_string(),
             );
-            Err(LendingError::NotRentExempt.into())
+            Err(BridgeError::NotRentExempt.into())
         } else {
             Ok(())
         }

@@ -1,13 +1,18 @@
 use solana_program::{
     program_error::ProgramError,
     msg,
+    pubkey::{Pubkey, PUBKEY_BYTES},
+    secp256k1_recover::{Secp256k1Pubkey}
 };
-use std::{convert::TryInto, str};
+use std::{convert::TryInto};
 use crate::error::BridgeError::{
     InvalidInstruction,
     InstructionUnpackError
 };
-use crate::state::UnshieldRequest;
+use crate::state::{
+    UnshieldRequest,
+    IncognitoProxy,
+};
 pub enum BridgeInstruction {
 
     ///// shield
@@ -17,13 +22,17 @@ pub enum BridgeInstruction {
         inc_address: String,
     },
 
-    ///// shield
+    ///// unshield
     UnShield {
         /// unshield info
         unshield_info: UnshieldRequest,
     },
 
-    // Unshield
+    ///// init beacon info
+    InitBeacon {
+        /// beacon info
+        init_beacon_info: IncognitoProxy,
+    },
 }
 
 impl BridgeInstruction {
@@ -82,6 +91,23 @@ impl BridgeInstruction {
                     }
                 }
             },
+            2 => {
+                let (vault_key, rest) = Self::unpack_pubkey(rest)?;
+                let (beacon_list_len, rest) =  Self::unpack_u8(rest)?;
+                let mut beacons = Vec::with_capacity(beacon_list_len as usize + 1);
+                for _ in 0..beacon_list_len {
+                    let (beacon, rest) = Self::unpack_bytes64(rest)?;
+                    let new_beacon = Secp256k1Pubkey::new(beacon);
+                    beacons.push(new_beacon);
+                }
+                Self::InitBeacon {
+                    init_beacon_info: IncognitoProxy{
+                        is_initialized: true,
+                        vault: vault_key,
+                        beacons
+                    }   
+                }
+            }
             _ => return Err(InvalidInstruction.into()),
         })
     }
@@ -152,6 +178,20 @@ impl BridgeInstruction {
         ))
     }
 
+    fn unpack_bytes64(input: &[u8]) -> Result<(&[u8; 64], &[u8]), ProgramError> {
+        if input.len() < 64 {
+            msg!("64 bytes cannot be unpacked");
+            return Err(InstructionUnpackError.into());
+        }
+        let (bytes, rest) = input.split_at(64);
+        Ok((
+            bytes
+                .try_into()
+                .map_err(|_| InstructionUnpackError)?,
+            rest,
+        ))
+    }
+
     fn unpack_bool(input: &[u8]) -> Result<(bool, &[u8]), ProgramError> {
         let (value, rest) = Self::unpack_u8(input)?;
 
@@ -163,5 +203,15 @@ impl BridgeInstruction {
                 Err(ProgramError::InvalidAccountData)
             }
         }
+    }
+
+    fn unpack_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), ProgramError> {
+        if input.len() < PUBKEY_BYTES {
+            msg!("Pubkey cannot be unpacked");
+            return Err(InstructionUnpackError.into());
+        }
+        let (key, rest) = input.split_at(PUBKEY_BYTES);
+        let pk = Pubkey::new(key);
+        Ok((pk, rest))
     }
 }
