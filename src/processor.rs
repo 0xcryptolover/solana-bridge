@@ -86,7 +86,7 @@ impl Processor {
             shield_maker_token_account.key,
             vault_token_account.key,
             shied_maker.key,
-            &[&shied_maker.key],
+            &[],
             amount,
         )?;
         msg!("Calling the token program to transfer token from user account to vault");
@@ -110,6 +110,60 @@ impl Processor {
         unshield_info: UnshieldRequest,
         program_id: &Pubkey,
     ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+        let unshield_maker = next_account_info(account_info_iter)?;
+
+        if !unshield_maker.is_signer {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+        let unshield_maker_token_account = next_account_info(account_info_iter)?;
+        let vault_token_account = next_account_info(account_info_iter)?;
+        let vault_authority_account = next_account_info(account_info_iter)?;
+        let vault_account = next_account_info(account_info_iter)?;
+        let incognito_proxy = next_account_info(account_info_iter)?;
+        let unshield_token_account = next_account_info(account_info_iter)?;
+        let token_program = next_account_info(account_info_iter)?;
+        let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
+
+        if incognito_proxy_info.vault != *vault_account.key {
+            msg!("Send to wrong vault account");
+            return Err(ProgramError::IncorrectProgramId); 
+        }
+
+        if incognito_proxy.owner != program_id {
+            msg!("Invalid incognito proxy");
+            return Err(ProgramError::IncorrectProgramId);
+        }
+
+
+        // prepare to transfer token to user
+        let authority_signer_seeds = &[
+            incognito_proxy.key.as_ref(),
+            &[incognito_proxy_info.bump_seed],
+        ];
+
+        let vault_authority_pubkey =
+        Pubkey::create_program_address(authority_signer_seeds, program_id)?;
+
+        let transfer_to_vault_tx = spl_token::instruction::transfer(
+            token_program.key,
+            vault_token_account.key,
+            unshield_token_account.key,
+            &vault_authority_pubkey,
+            &[],
+            amount,
+        )?;
+        msg!("Calling the token program to transfer token from to user");
+        invoke_signed(
+            &transfer_to_vault_tx,
+            &[
+                vault_token_account.clone(),
+                unshield_token_account.clone(),
+                vault_authority_account.clone(),
+                token_program.clone(),
+            ],
+            authority_signer_seeds,
+        )?;
 
         Ok(())
     }
