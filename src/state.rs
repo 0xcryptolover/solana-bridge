@@ -22,7 +22,7 @@ impl IsInitialized for Withdraw {
 }
 
 impl Withdraw {
-    const LEN: usize = 1 + (4 + (33 * 100)); // 
+    const LEN: usize = 1 + (4 + (33 * 100)); // 100 records
 }
 
 
@@ -108,7 +108,6 @@ impl Pack for IncognitoProxy {
         pack_bool(self.is_initialized, is_initialized);
         vault.copy_from_slice(self.vault.as_ref());
 
-
         let mut offset = 0;
         // beacons
         for beacon in &self.beacons {
@@ -130,17 +129,17 @@ pub struct UnshieldRequest {
     // beacon height
     pub height: u64,
     // inst paths to build merkle tree
-    pub instPaths: Vec<[u8; 32]>,
+    pub inst_paths: Vec<[u8; 32]>,
     // inst path indicator
-    pub instPathIsLefts: Vec<bool>,
+    pub inst_path_is_lefts: Vec<bool>,
     // instruction root
-    pub instRoots: [u8; 32],
+    pub inst_root: [u8; 32],
     // blkData
-    pub blkData: [u8; 32],
+    pub blk_data: [u8; 32],
     // signature index
     pub indexes: Vec<u8>,
     // signature 
-    pub signature: Vec<[u8; 65]>
+    pub signatures: Vec<[u8; 65]>
 }
 
 fn pack_bool(boolean: bool, dst: &mut [u8; 1]) {

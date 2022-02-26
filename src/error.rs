@@ -21,6 +21,9 @@ pub enum BridgeError {
     /// The list of beacon already initalized
     #[error("Beacons already initialized")]
     BeaconsInitialized,
+    /// Invalid instruction data passed in.
+    #[error("Failed to unpack instruction data")]
+    InstructionUnpackError,
 }
 
 impl From<BridgeError> for ProgramError {

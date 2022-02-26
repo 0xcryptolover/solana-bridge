@@ -25,7 +25,7 @@ impl Processor {
         match instruction {
             BridgeInstruction::Shield { amount, inc_address } => {
                 msg!("Instruction: Shield");
-                Self::process_exchange(accounts, amount, inc_address, program_id)
+                Self::process_shield(accounts, amount, inc_address, program_id)
             }
             BridgeInstruction::UnShield { amount, unshield_info } => {
                 msg!("Instruction: Unshield");
