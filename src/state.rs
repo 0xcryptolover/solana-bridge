@@ -6,25 +6,18 @@ use solana_program::{
 };
 use std::{collections::BTreeMap};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
+use borsh::{BorshSerialize, BorshDeserialize};
 
 /// ====== INCOGNITO VAULT =======
-pub struct Withdraw {
-    pub is_initialized: bool,
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
+pub struct Vault {
+    pub is_initialized: u8,
     pub map: BTreeMap<[u8; 32], bool> // 100
 }
 
-impl Sealed for Withdraw {}
-
-impl IsInitialized for Withdraw {
-    fn is_initialized(&self) -> bool {
-        self.is_initialized
-    }
+impl Vault {
+    const LEN: usize = 1 + (4 + (100 * 33)); // 100 tx id to store
 }
-
-impl Withdraw {
-    const LEN: usize = 1 + (4 + (33 * 100)); // 100 records
-}
-
 
 /// ====== INCOGNITO PROXY =======
 /// 
@@ -35,6 +28,8 @@ pub const MAX_BEACON_ADDRESSES: usize = 20;
 pub struct IncognitoProxy {
     // init beacon 
     pub is_initialized: bool,
+    // bump seed
+    pub bump_seed: u8,
     // vault key
     pub vault: Pubkey,
     /// beacon list
@@ -51,16 +46,18 @@ impl Sealed for IncognitoProxy {}
 
 impl Pack for IncognitoProxy {
     /// 1 + 32 + 1 + 64 * 20 
-    const LEN: usize = 1314;
+    const LEN: usize = 1315;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, IncognitoProxy::LEN];
         let (
             is_initialized,
+            bump_seed,
             vault_key,
             beacon_len,
             data_flat
         ) = array_refs![
             src, 
+            1,
             1, 
             PUBKEY_BYTES, 
             1, 
@@ -85,6 +82,7 @@ impl Pack for IncognitoProxy {
 
         Ok(IncognitoProxy {
             is_initialized,
+            bump_seed: u8::from_le_bytes(*bump_seed),
             vault: Pubkey::new_from_array(*vault_key),
             beacons
         })
@@ -94,17 +92,20 @@ impl Pack for IncognitoProxy {
         let dst = array_mut_ref![dst, 0, IncognitoProxy::LEN];
         let (
             is_initialized,
+            bump_seed,
             vault,
             beacon_len,
             data_flat
         ) = mut_array_refs![
             dst, 
             1, 
+            1,
             PUBKEY_BYTES, 
             1, 
             SECP256K1_PUBLIC_KEY_LENGTH * MAX_BEACON_ADDRESSES
         ];
         *beacon_len = u8::try_from(self.beacons.len()).unwrap().to_le_bytes();
+        *bump_seed = self.bump_seed.to_le_bytes();
         pack_bool(self.is_initialized, is_initialized);
         vault.copy_from_slice(self.vault.as_ref());
 

@@ -93,6 +93,7 @@ impl BridgeInstruction {
             },
             2 => {
                 let (vault_key, rest) = Self::unpack_pubkey(rest)?;
+                let (bump_seed, rest) = Self::unpack_u8(rest)?;
                 let (beacon_list_len, rest) =  Self::unpack_u8(rest)?;
                 let mut beacons = Vec::with_capacity(beacon_list_len as usize + 1);
                 for _ in 0..beacon_list_len {
@@ -103,6 +104,7 @@ impl BridgeInstruction {
                 Self::InitBeacon {
                     init_beacon_info: IncognitoProxy{
                         is_initialized: true,
+                        bump_seed,
                         vault: vault_key,
                         beacons
                     }   

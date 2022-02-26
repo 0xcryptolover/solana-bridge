@@ -7,11 +7,12 @@ use solana_program::{
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
     sysvar::{rent::Rent, Sysvar},
+    system_instruction,
 };
 
 use spl_token::state::Account as TokenAccount;
 
-use crate::{error::BridgeError, instruction::BridgeInstruction, state::{Withdraw, UnshieldRequest, IncognitoProxy}};
+use crate::{error::BridgeError, instruction::BridgeInstruction, state::{Vault, UnshieldRequest, IncognitoProxy}};
 
 pub struct Processor;
 impl Processor {
@@ -51,31 +52,51 @@ impl Processor {
             return Err(ProgramError::MissingRequiredSignature);
         }
         let shield_maker_token_account = next_account_info(account_info_iter)?;
-        let vault_account = next_account_info(account_info_iter)?;
-        let vault_general_account = next_account_info(account_info_iter)?;
+        let vault_token_account = next_account_info(account_info_iter)?;
+        let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
+        let incognito_proxy = next_account_info(account_info_iter)?;
         let token_program = next_account_info(account_info_iter)?;
-        if vault_general_account.owner != program_id {
-            msg!("Vault general account provided is not owned by program id");
-            return Err(BridgeError::InvalidAccountOwner.into());
+
+        if incognito_proxy.owner != program_id {
+            msg!("Invalid incognito proxy");
+            return Err(ProgramError::IncorrectProgramId);
         }
-        let mut reserve = Reserve::unpack(&reserve_info.data.borrow())?;
 
+        if *vault_token_account.owner != spl_token::id() {
+            msg!("Vault token account must be owned by spl token");
+            return Err(ProgramError::IncorrectProgramId);
+        }
+        let vault_token_account_info = TokenAccount::unpack(&vault_token_account.try_borrow_data()?)?;
+        let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
+        let authority_signer_seeds = &[
+            incognito_proxy.key.as_ref(),
+            &[incognito_proxy_info.bump_seed],
+        ];
 
+        let vault_authority_pubkey =
+        Pubkey::create_program_address(authority_signer_seeds, program_id)?;
+
+        if vault_token_account_info.owner != vault_authority_pubkey {
+            msg!("Send to wrong vault token account");
+            return Err(ProgramError::IncorrectProgramId); 
+        }
+        assert_rent_exempt(rent, vault_token_account)?;
+  
         let transfer_to_vault_tx = spl_token::instruction::transfer(
             token_program.key,
             shield_maker_token_account.key,
-            vault_account.key,
+            vault_token_account.key,
             shied_maker.key,
             &[&shied_maker.key],
             amount,
         )?;
         msg!("Calling the token program to transfer token from user account to vault");
         invoke(
-            &transfer_to_initializer_ix,
+            &transfer_to_vault_tx,
             &[
-                takers_sending_token_account.clone(),
-                initializers_token_to_receive_account.clone(),
-                taker.clone(),
+                shield_maker_token_account.clone(),
+                vault_token_account.clone(),
+                shied_maker.clone(),
                 token_program.clone(),
             ],
         )?;
@@ -105,18 +126,18 @@ impl Processor {
         
         Ok(())
     }
+}
 
-    // check rent exempt
-    fn assert_rent_exempt(rent: &Rent, account_info: &AccountInfo) -> ProgramResult {
-        if !rent.is_exempt(account_info.lamports(), account_info.data_len()) {
-            msg!(
-                "Rent exempt balance insufficient got {} expected {}",
-                &account_info.lamports().to_string(),
-                &rent.minimum_balance(account_info.data_len()).to_string(),
-            );
-            Err(BridgeError::NotRentExempt.into())
-        } else {
-            Ok(())
-        }
+// check rent exempt
+fn assert_rent_exempt(rent: &Rent, account_info: &AccountInfo) -> ProgramResult {
+    if !rent.is_exempt(account_info.lamports(), account_info.data_len()) {
+        msg!(
+            "Rent exempt balance insufficient got {} expected {}",
+            &account_info.lamports().to_string(),
+            &rent.minimum_balance(account_info.data_len()).to_string(),
+        );
+        Err(BridgeError::NotRentExempt.into())
+    } else {
+        Ok(())
     }
 }
