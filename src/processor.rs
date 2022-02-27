@@ -11,8 +11,10 @@ use solana_program::{
 };
 
 use spl_token::state::Account as TokenAccount;
-
+use arrayref::{array_refs, array_ref};
 use crate::{error::BridgeError, instruction::BridgeInstruction, state::{Vault, UnshieldRequest, IncognitoProxy}};
+
+const LEN: usize = 1 + 1 + 32 + 32 + 8 + 32; 
 
 pub struct Processor;
 impl Processor {
@@ -94,10 +96,11 @@ impl Processor {
         msg!("Issue pToken to address {}, token {}", inc_address, token_program.key);
 
         Ok(())
+    
     }
 
     /// [x] declare vars
-    /// [ ] extract info from input params
+    /// [x] extract info from input params
     /// [ ] verify beacon signatures
     /// [ ] verify instruction merkle tree
     /// [x] transfer token back to user
@@ -114,7 +117,6 @@ impl Processor {
         if !unshield_maker.is_signer {
             return Err(ProgramError::MissingRequiredSignature);
         }
-        let unshield_maker_token_account = next_account_info(account_info_iter)?;
         let vault_token_account = next_account_info(account_info_iter)?;
         let vault_authority_account = next_account_info(account_info_iter)?;
         let vault_account = next_account_info(account_info_iter)?;
@@ -133,9 +135,42 @@ impl Processor {
             return Err(ProgramError::IncorrectProgramId);
         }
 
-        // verify beacon signature
-        let amount = 100;
+        // extract data from input
+        let inst = unshield_info.inst.as_bytes();
+        if inst.len() < LEN {
+            msg!("Invalid instruction input");
+            return Err(BridgeError::InvalidBeaconInstruction.into());
+        }
+        let inst_ = array_ref![inst, 0, LEN];
+        #[allow(clippy::ptr_offset_with_cast)]
+        let (
+            meta_type,
+            shard_id,
+            token,
+            receiver_key,
+            unshield_amount,
+            tx_id,
+        ) = array_refs![
+            inst_,
+            1,
+            1,
+            32,
+            32,
+            8,
+            32
+        ];
+        let meta_type = u8::from_le_bytes(*meta_type);
+        let shard_id = u8::from_le_bytes(*shard_id);
+        let token_key = Pubkey::new(token);
+        let receiver_key = Pubkey::new(receiver_key);
+        let unshield_amount = unshield_amount
+            .get(..8)
+            .and_then(|slice| slice.try_into().ok())
+            .map(u64::from_le_bytes)
+            .ok_or(BridgeError::InstructionUnpackError)?;
+        
 
+        // verify beacon signature
 
         // prepare to transfer token to user
         let authority_signer_seeds = &[
@@ -158,7 +193,7 @@ impl Processor {
         spl_token_transfer(TokenTransferParams {
             source: vault_token_account.clone(),
             destination: unshield_token_account.clone(),
-            amount,
+            amount: unshield_amount,
             authority: vault_authority_account.clone(),
             authority_signer_seeds,
             token_program: token_program.clone(),

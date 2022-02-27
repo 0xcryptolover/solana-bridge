@@ -29,7 +29,10 @@ pub enum BridgeError {
     TokenTransferFailed,
     /// Invalid authority to transfer token
     #[error("Transfer token failed")]
-    InvalidTokenAuthority
+    InvalidTokenAuthority,
+    /// Invalid instruction input
+    #[error("Invalid beacon instruction input")]
+    InvalidBeaconInstruction,
 }
 
 impl From<BridgeError> for ProgramError {
