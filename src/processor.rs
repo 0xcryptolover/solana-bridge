@@ -202,12 +202,19 @@ impl Processor {
         let beacon_inst_hash = hash(&inst_vec[..]);
 
         for i in 0..unshield_info.indexes.len() {
-            let s_r_v = unshield_info.signatures.get(i);
-            // let test = s_r_v.
-            // let (s_r, v) = s_r_v.split_at(64);
-            // let s_r = s_r_v[0..65];
-            // let (s_r, v) = array_refs![s_r_v, 64, 1];
-            // let beacon_key = incognito_proxy_info.beacons.get(unshield_info.indexes.get(i) as usize);
+            let s_r_v = unshield_info.signatures[i];
+            let (s_r, v) = s_r_v.split_at(64);
+            let beacon_key_from_signature_result = secp256k1_recover(
+                &beacon_inst_hash.to_bytes()[..],
+                v[0],
+                s_r,
+            );
+            let beacon_key_from_signature = beacon_key_from_signature_result.unwrap();
+            let beacon_key = incognito_proxy_info.beacons[unshield_info.indexes[i] as usize];
+            if beacon_key_from_signature != beacon_key {
+                msg!("Invalid beacon signature");
+                return Err(BridgeError::InvalidBeaconSignature.into());
+            }
         }
 
         // todo: store txid

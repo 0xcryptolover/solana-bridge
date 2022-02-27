@@ -98,10 +98,11 @@ impl BridgeInstruction {
             2 => {
                 let (vault_key, rest) = Self::unpack_pubkey(rest)?;
                 let (bump_seed, rest) = Self::unpack_u8(rest)?;
-                let (beacon_list_len, rest) =  Self::unpack_u8(rest)?;
+                let (beacon_list_len, mut rest) =  Self::unpack_u8(rest)?;
                 let mut beacons = Vec::with_capacity(beacon_list_len as usize + 1);
                 for _ in 0..beacon_list_len {
-                    let (beacon, rest) = Self::unpack_bytes64(rest)?;
+                    let (beacon, rest_) = Self::unpack_bytes64(rest)?;
+                    rest = rest_;
                     let new_beacon = Secp256k1Pubkey::new(beacon);
                     beacons.push(new_beacon);
                 }

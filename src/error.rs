@@ -39,6 +39,9 @@ pub enum BridgeError {
     /// Not enough signatures in inst provided
     #[error("Invalid number of signatures")]
     InvalidNumberOfSignature,
+    /// Invalid beacon signature
+    #[error("Invalid beacon signature")]
+    InvalidBeaconSignature,
 }
 
 impl From<BridgeError> for ProgramError {
