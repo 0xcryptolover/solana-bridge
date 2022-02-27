@@ -8,6 +8,8 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::{rent::Rent, Sysvar},
     instruction::Instruction,
+    secp256k1_recover::secp256k1_recover,
+    keccak::hash
 };
 
 use spl_token::state::Account as TokenAccount;
@@ -100,9 +102,10 @@ impl Processor {
     }
 
     /// [x] declare vars
-    /// [x] extract info from input params
+    /// [x] extract info from input params =>  todo incognito turn 20 bytes -> 32 bytes
     /// [ ] verify beacon signatures
     /// [ ] verify instruction merkle tree
+    /// [ ] store unshield tx id
     /// [x] transfer token back to user
 
     // add logic to proccess unshield for users
@@ -149,7 +152,7 @@ impl Processor {
             token,
             receiver_key,
             unshield_amount,
-            tx_id,
+            tx_id, // store this data
         ) = array_refs![
             inst_,
             1,
@@ -163,14 +166,51 @@ impl Processor {
         let shard_id = u8::from_le_bytes(*shard_id);
         let token_key = Pubkey::new(token);
         let receiver_key = Pubkey::new(receiver_key);
-        let unshield_amount = unshield_amount
-            .get(..8)
-            .and_then(|slice| slice.try_into().ok())
-            .map(u64::from_le_bytes)
-            .ok_or(BridgeError::InstructionUnpackError)?;
-        
+        let unshield_amount = u64::from_le_bytes(*unshield_amount);
+
+        // validate metatype and key provided
+        if meta_type != 155 || shard_id != 1 {
+            msg!("Invalid beacon instruction metatype {}, {}", meta_type, shard_id);
+            return Err(BridgeError::InvalidKeysInInstruction.into());
+        }
+
+        if token_key != *token_program.key {
+            msg!("Token key and key provided not match {}, {}", token_key, *token_program.key);
+            return Err(BridgeError::InvalidKeysInInstruction.into());
+        }
+
+        if receiver_key != *unshield_token_account.key {
+            msg!("Receive key and key provided not match {}, {}", receiver_key, *unshield_token_account.key);
+            return Err(BridgeError::InvalidKeysInInstruction.into());
+        }
 
         // verify beacon signature
+        if unshield_info.indexes.len() != unshield_info.signatures.len() {
+            msg!("Invalid instruction provided, length of indexes and signatures not match");
+            return Err(BridgeError::InvalidBeaconInstruction.into());
+        }
+
+        if unshield_info.signatures.len() <= incognito_proxy_info.beacons.len() * 2 / 3 {
+            msg!("Invalid instruction input");
+            return Err(BridgeError::InvalidNumberOfSignature.into());
+        } 
+
+        // append block height to instruction
+        let height_bytes = unshield_info.height.to_le_bytes();
+        let mut inst_vec = inst.to_vec();
+        inst_vec.extend_from_slice(&height_bytes);
+        let beacon_inst_hash = hash(&inst_vec[..]);
+
+        for i in 0..unshield_info.indexes.len() {
+            let s_r_v = unshield_info.signatures.get(i);
+            // let test = s_r_v.
+            // let (s_r, v) = s_r_v.split_at(64);
+            // let s_r = s_r_v[0..65];
+            // let (s_r, v) = array_refs![s_r_v, 64, 1];
+            // let beacon_key = incognito_proxy_info.beacons.get(unshield_info.indexes.get(i) as usize);
+        }
+
+        // todo: store txid
 
         // prepare to transfer token to user
         let authority_signer_seeds = &[

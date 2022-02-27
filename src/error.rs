@@ -33,6 +33,12 @@ pub enum BridgeError {
     /// Invalid instruction input
     #[error("Invalid beacon instruction input")]
     InvalidBeaconInstruction,
+    /// Invalid keys in instruction input
+    #[error("Invalid keys in instruction input")]
+    InvalidKeysInInstruction,
+    /// Not enough signatures in inst provided
+    #[error("Invalid number of signatures")]
+    InvalidNumberOfSignature,
 }
 
 impl From<BridgeError> for ProgramError {
