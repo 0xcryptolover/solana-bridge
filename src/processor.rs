@@ -7,6 +7,7 @@ use solana_program::{
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
     sysvar::{rent::Rent, Sysvar},
+    instruction::Instruction,
 };
 
 use spl_token::state::Account as TokenAccount;
@@ -80,25 +81,16 @@ impl Processor {
             return Err(ProgramError::IncorrectProgramId); 
         }
         assert_rent_exempt(rent, vault_token_account)?;
-  
-        let transfer_to_vault_tx = spl_token::instruction::transfer(
-            token_program.key,
-            shield_maker_token_account.key,
-            vault_token_account.key,
-            shied_maker.key,
-            &[],
+
+        spl_token_transfer(TokenTransferParams {
+            source: shield_maker_token_account.clone(),
+            destination: vault_token_account.clone(),
             amount,
-        )?;
-        msg!("Calling the token program to transfer token from user account to vault");
-        invoke(
-            &transfer_to_vault_tx,
-            &[
-                shield_maker_token_account.clone(),
-                vault_token_account.clone(),
-                shied_maker.clone(),
-                token_program.clone(),
-            ],
-        )?;
+            authority: shied_maker.clone(),
+            authority_signer_seeds: &[],
+            token_program: token_program.clone(),
+        })?;
+
         msg!("Issue pToken to address {}, token {}", inc_address, token_program.key);
 
         Ok(())
@@ -141,6 +133,9 @@ impl Processor {
             return Err(ProgramError::IncorrectProgramId);
         }
 
+        // verify beacon signature
+        let amount = 100;
+
 
         // prepare to transfer token to user
         let authority_signer_seeds = &[
@@ -151,25 +146,23 @@ impl Processor {
         let vault_authority_pubkey =
         Pubkey::create_program_address(authority_signer_seeds, program_id)?;
 
-        let transfer_to_vault_tx = spl_token::instruction::transfer(
-            token_program.key,
-            vault_token_account.key,
-            unshield_token_account.key,
-            &vault_authority_pubkey,
-            &[],
+        if &vault_authority_pubkey != vault_authority_account.key {
+            msg!(
+                "Derived vault authority {} does not match the vault authority account provided {}",
+                &vault_authority_pubkey.to_string(),
+                &vault_authority_account.key.to_string(),
+            );
+            return Err(BridgeError::InvalidTokenAuthority.into());
+        }
+
+        spl_token_transfer(TokenTransferParams {
+            source: vault_token_account.clone(),
+            destination: unshield_token_account.clone(),
             amount,
-        )?;
-        msg!("Calling the token program to transfer token from to user");
-        invoke_signed(
-            &transfer_to_vault_tx,
-            &[
-                vault_token_account.clone(),
-                unshield_token_account.clone(),
-                vault_authority_account.clone(),
-                token_program.clone(),
-            ],
+            authority: vault_authority_account.clone(),
             authority_signer_seeds,
-        )?;
+            token_program: token_program.clone(),
+        })?;
 
         Ok(())
     }
@@ -218,4 +211,53 @@ fn assert_rent_exempt(rent: &Rent, account_info: &AccountInfo) -> ProgramResult 
     } else {
         Ok(())
     }
+}
+
+/// Issue a spl_token `Transfer` instruction.
+#[inline(always)]
+fn spl_token_transfer(params: TokenTransferParams<'_, '_>) -> ProgramResult {
+    let TokenTransferParams {
+        source,
+        destination,
+        authority,
+        token_program,
+        amount,
+        authority_signer_seeds,
+    } = params;
+    let result = invoke_optionally_signed(
+        &spl_token::instruction::transfer(
+            token_program.key,
+            source.key,
+            destination.key,
+            authority.key,
+            &[],
+            amount,
+        )?,
+        &[source, destination, authority, token_program],
+        authority_signer_seeds,
+    );
+    result.map_err(|_| BridgeError::TokenTransferFailed.into())
+}
+
+/// Invoke signed unless signers seeds are empty
+#[inline(always)]
+fn invoke_optionally_signed(
+    instruction: &Instruction,
+    account_infos: &[AccountInfo],
+    authority_signer_seeds: &[&[u8]],
+) -> ProgramResult {
+    if authority_signer_seeds.is_empty() {
+        invoke(instruction, account_infos)
+    } else {
+        invoke_signed(instruction, account_infos, &[authority_signer_seeds])
+    }
+}
+
+struct TokenTransferParams<'a: 'b, 'b> {
+    source: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
+    amount: u64,
+    authority: AccountInfo<'a>,
+    authority_signer_seeds: &'b [&'b [u8]],
+    token_program: AccountInfo<'a>,
 }

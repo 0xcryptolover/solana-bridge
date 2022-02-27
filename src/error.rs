@@ -24,6 +24,12 @@ pub enum BridgeError {
     /// Invalid instruction data passed in.
     #[error("Failed to unpack instruction data")]
     InstructionUnpackError,
+    /// Transfer token failed.
+    #[error("Transfer token failed")]
+    TokenTransferFailed,
+    /// Invalid authority to transfer token
+    #[error("Transfer token failed")]
+    InvalidTokenAuthority
 }
 
 impl From<BridgeError> for ProgramError {
