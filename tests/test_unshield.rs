@@ -62,7 +62,7 @@ async fn test_unshield_success() {
     //         )
     //             .unwrap(),
     //         deposit_obligation_collateral(
-    //             spl_token_lending::id(),
+    //             spl_token::id(),
     //             SOL_DEPOSIT_AMOUNT_LAMPORTS,
     //             sol_test_reserve.user_collateral_pubkey,
     //             sol_test_reserve.collateral_supply_pubkey,

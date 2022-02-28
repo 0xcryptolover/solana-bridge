@@ -19,8 +19,9 @@ use spl_token::{
     instruction::approve,
     state::{Account as Token, AccountState, Mint},
 };
+use solana_bridge::instruction::shield;
 
-use crate::helpers::add_packable_account;
+use crate::helpers::{add_packable_account, get_token_balance};
 
 #[tokio::test]
 async fn test_shield_success() {
@@ -53,7 +54,7 @@ async fn test_shield_success() {
 
     // limit to track compute unit increase
     test.set_compute_max_units(38_000);
-    // todo add beacon
+
     let mut vec = Vec::new();
     add_packable_account(
         &mut test,
@@ -63,7 +64,7 @@ async fn test_shield_success() {
             is_initialized: true,
             bump_seed,
             vault: vault_account_id,
-            beacons: vec,
+            beacons: vec, // todo add beacon
         }),
         &spl_token::id(),
     );
@@ -98,32 +99,40 @@ async fn test_shield_success() {
         &spl_token::id(),
     );
 
-
     let (mut banks_client, payer, recent_blockhash) = test.start().await;
 
-    // let mut transaction = Transaction::new_with_payer(
-    //     &[
-    //         approve(
-    //             &spl_token::id(),
-    //             &sol_test_reserve.user_collateral_pubkey,
-    //             &user_transfer_authority.pubkey(),
-    //             &user_accounts_owner.pubkey(),
-    //             &[],
-    //             SOL_DEPOSIT_AMOUNT_LAMPORTS,
-    //         )
-    //             .unwrap(),
-    //         deposit_obligation_collateral(
-    //             spl_token_lending::id(),
-    //             SOL_DEPOSIT_AMOUNT_LAMPORTS,
-    //             sol_test_reserve.user_collateral_pubkey,
-    //             sol_test_reserve.collateral_supply_pubkey,
-    //             sol_test_reserve.pubkey,
-    //             test_obligation.pubkey,
-    //             lending_market.pubkey,
-    //             test_obligation.owner,
-    //             user_transfer_authority.pubkey(),
-    //         ),
-    //     ],
-    //     Some(&payer.pubkey()),
-    // );
+    let inital_shield_maker_account =
+        get_token_balance(&mut banks_client, shield_maker_token_account).await;
+    let initial_vault_token_account =
+        get_token_balance(&mut banks_client, vault_token_account).await;
+
+    println!("amount shield maker and vault account before {}, {}", initial_vault_token_account, inital_shield_maker_account);
+
+    let mut transaction = Transaction::new_with_payer(
+        &[
+            shield(
+                program_id,
+                deposit_amount,
+                shield_maker_token_account,
+                vault_token_account,
+                incognito_proxy,
+                shield_maker.pubkey(),
+                &[1; 148],
+            ),
+        ],
+        Some(&payer.pubkey()),
+    );
+
+    transaction.sign(
+        &vec![&payer, &shield_maker],
+        recent_blockhash,
+    );
+    assert!(banks_client.process_transaction(transaction).await.is_ok());
+
+    let after_shield_maker_account =
+        get_token_balance(&mut banks_client, shield_maker_token_account).await;
+    let after_vault_token_account =
+        get_token_balance(&mut banks_client, vault_token_account).await;
+
+    println!("amount shield maker and vault account after {}, {}", after_shield_maker_account, after_vault_token_account);
 }

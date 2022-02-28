@@ -2,7 +2,8 @@ use solana_program::{
     program_error::ProgramError,
     msg,
     pubkey::{Pubkey, PUBKEY_BYTES},
-    secp256k1_recover::{Secp256k1Pubkey}
+    secp256k1_recover::{Secp256k1Pubkey},
+    instruction::{AccountMeta, Instruction},
 };
 use crate::error::BridgeError::{
     InvalidInstruction,
@@ -13,6 +14,7 @@ use crate::state::{
     IncognitoProxy,
 };
 use std::{convert::TryInto, mem::size_of};
+use crate::instruction::BridgeInstruction::Shield;
 
 pub enum BridgeInstruction {
 
@@ -237,62 +239,46 @@ impl BridgeInstruction {
         Ok((pk, rest))
     }
 
-    // pub fn pack(&self) -> Vec<u8> {
-    //     let mut buf = Vec::with_capacity(size_of::<Self>());
-    //     match *self {
-    //         Self::Shield {
-    //             amount,
-    //             inc_address,
-    //         } => {
-    //             buf.push(0);
-    //             buf.extend_from_slice(owner.as_ref());
-    //             buf.extend_from_slice(quote_currency.as_ref());
-    //         }
-    //         Self::UnShield {
-    //
-    //         } => {
-    //             buf.push(1);
-    //             buf.extend_from_slice(new_owner.as_ref());
-    //         }
-    //         Self::InitBeacon {
-    //             liquidity_amount,
-    //             config:
-    //             ReserveConfig {
-    //                 optimal_utilization_rate,
-    //                 loan_to_value_ratio,
-    //                 liquidation_bonus,
-    //                 liquidation_threshold,
-    //                 min_borrow_rate,
-    //                 optimal_borrow_rate,
-    //                 max_borrow_rate,
-    //                 fees:
-    //                 ReserveFees {
-    //                     borrow_fee_wad,
-    //                     flash_loan_fee_wad,
-    //                     host_fee_percentage,
-    //                 },
-    //                 deposit_limit,
-    //                 borrow_limit,
-    //                 fee_receiver,
-    //             },
-    //         } => {
-    //             buf.push(2);
-    //             buf.extend_from_slice(&liquidity_amount.to_le_bytes());
-    //             buf.extend_from_slice(&optimal_utilization_rate.to_le_bytes());
-    //             buf.extend_from_slice(&loan_to_value_ratio.to_le_bytes());
-    //             buf.extend_from_slice(&liquidation_bonus.to_le_bytes());
-    //             buf.extend_from_slice(&liquidation_threshold.to_le_bytes());
-    //             buf.extend_from_slice(&min_borrow_rate.to_le_bytes());
-    //             buf.extend_from_slice(&optimal_borrow_rate.to_le_bytes());
-    //             buf.extend_from_slice(&max_borrow_rate.to_le_bytes());
-    //             buf.extend_from_slice(&borrow_fee_wad.to_le_bytes());
-    //             buf.extend_from_slice(&flash_loan_fee_wad.to_le_bytes());
-    //             buf.extend_from_slice(&host_fee_percentage.to_le_bytes());
-    //             buf.extend_from_slice(&deposit_limit.to_le_bytes());
-    //             buf.extend_from_slice(&borrow_limit.to_le_bytes());
-    //             buf.extend_from_slice(&fee_receiver.to_bytes());
-    //         }
-    //     }
-    //     buf
-    // }
+    pub fn pack(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(size_of::<Self>());
+        match *self {
+            Self::Shield {
+                amount,
+                inc_address,
+            } => {
+                buf.push(0);
+                buf.extend_from_slice(&amount.to_le_bytes());
+                buf.extend_from_slice(inc_address.as_ref());
+            }
+            // todo: implement unshield and init bridge
+            _ => {
+
+            }
+        }
+        buf
+    }
+}
+
+/// Creates a 'Shield' instruction.
+#[allow(clippy::too_many_arguments)]
+pub fn shield(
+    program_id: Pubkey,
+    amount: u64,
+    shield_maker_token_account: Pubkey,
+    vault_token_account: Pubkey,
+    incoginto_proxy: Pubkey,
+    shield_maker_authority: Pubkey,
+    inc_address: &[u8; 148],
+) -> Instruction {
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(shield_maker_token_account, false),
+            AccountMeta::new(vault_token_account, false),
+            AccountMeta::new_readonly(incoginto_proxy, false),
+            AccountMeta::new_readonly(shield_maker_authority, true),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: BridgeInstruction::Shield { amount, inc_address: *inc_address }.pack(),
+    }
 }

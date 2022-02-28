@@ -48,14 +48,13 @@ fn process_shield(
     program_id: &Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    let shied_maker = next_account_info(account_info_iter)?;
-
-    if !shied_maker.is_signer {
-        return Err(ProgramError::MissingRequiredSignature);
-    }
     let shield_maker_token_account = next_account_info(account_info_iter)?;
     let vault_token_account = next_account_info(account_info_iter)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
+    let shied_maker = next_account_info(account_info_iter)?;
+    if !shied_maker.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
     let token_program = next_account_info(account_info_iter)?;
 
     if incognito_proxy.owner != program_id {
