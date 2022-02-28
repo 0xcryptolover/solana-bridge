@@ -48,7 +48,7 @@ impl BridgeInstruction {
                 let (inc_address, _) = Self::unpack_bytes148(rest)?;
                 Self::Shield {
                     amount,
-                    inc_address: *inc_address
+                    inc_address: inc_address.clone()
                 }
             },
             1 => {
@@ -151,7 +151,7 @@ impl BridgeInstruction {
             msg!("148 bytes cannot be unpacked");
             return Err(InstructionUnpackError.into());
         }
-        let (bytes, rest) = input.split_at(32);
+        let (bytes, rest) = input.split_at(148);
         Ok((
             bytes
                 .try_into()
@@ -279,6 +279,6 @@ pub fn shield(
             AccountMeta::new_readonly(shield_maker_authority, true),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
-        data: BridgeInstruction::Shield { amount, inc_address: *inc_address }.pack(),
+        data: BridgeInstruction::Shield { amount, inc_address: inc_address.clone() }.pack(),
     }
 }

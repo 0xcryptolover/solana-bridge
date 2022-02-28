@@ -68,6 +68,7 @@ fn process_shield(
     }
     let vault_token_account_info = TokenAccount::unpack(&vault_token_account.try_borrow_data()?)?;
     let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
+    msg!("bump seed {}", incognito_proxy_info.bump_seed);
     let authority_signer_seeds = &[
         incognito_proxy.key.as_ref(),
         &[incognito_proxy_info.bump_seed],

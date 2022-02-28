@@ -44,7 +44,15 @@ async fn test_shield_success() {
 
     let deposit_amount: u64 = 100_0000;
     let (incognito_proxy_authority_key, bump_seed) =
-        Pubkey::find_program_address(&[incognito_proxy.as_ref()], &spl_token::id());
+        Pubkey::find_program_address(&[incognito_proxy.as_ref()], &program_id);
+
+    let authority_signer_seeds = &[
+        incognito_proxy.as_ref(),
+        &[bump_seed],
+    ];
+    let incognito_proxy_authority_key_gen = Pubkey::create_program_address(authority_signer_seeds, &program_id).unwrap();
+
+    println!("generated incognito authority key {}, {}", incognito_proxy_authority_key.to_string(), incognito_proxy_authority_key_gen.to_string());
 
     let mut test = ProgramTest::new(
         "bridge_solana",
@@ -55,7 +63,7 @@ async fn test_shield_success() {
     // limit to track compute unit increase
     test.set_compute_max_units(38_000);
 
-    let mut vec = Vec::new();
+    println!("bump seeed in test {}", bump_seed);
     add_packable_account(
         &mut test,
         incognito_proxy,
@@ -64,9 +72,9 @@ async fn test_shield_success() {
             is_initialized: true,
             bump_seed,
             vault: vault_account_id,
-            beacons: vec, // todo add beacon
+            beacons: Vec::new(), // todo add beacons
         }),
-        &spl_token::id(),
+        &program_id,
     );
 
     // init shield maker token account
@@ -133,6 +141,12 @@ async fn test_shield_success() {
         get_token_balance(&mut banks_client, shield_maker_token_account).await;
     let after_vault_token_account =
         get_token_balance(&mut banks_client, vault_token_account).await;
-
-    println!("amount shield maker and vault account after {}, {}", after_shield_maker_account, after_vault_token_account);
+    assert_eq!(
+        after_shield_maker_account,
+        inital_shield_maker_account - deposit_amount
+    );
+    assert_eq!(
+        after_vault_token_account,
+        initial_vault_token_account + deposit_amount
+    );
 }
