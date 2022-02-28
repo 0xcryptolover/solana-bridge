@@ -4,7 +4,6 @@ use solana_program::{
     pubkey::{Pubkey, PUBKEY_BYTES},
     secp256k1_recover::{Secp256k1Pubkey}
 };
-use std::{convert::TryInto};
 use crate::error::BridgeError::{
     InvalidInstruction,
     InstructionUnpackError
@@ -13,13 +12,15 @@ use crate::state::{
     UnshieldRequest,
     IncognitoProxy,
 };
+use std::{convert::TryInto, mem::size_of};
+
 pub enum BridgeInstruction {
 
     ///// shield
     Shield {
         /// shield info
         amount: u64,
-        inc_address: String,
+        inc_address: [u8; 148],
     },
 
     ///// unshield
@@ -42,10 +43,10 @@ impl BridgeInstruction {
         Ok(match tag {
             0 => {
                 let (amount, rest) = Self::unpack_u64(rest)?;
-                let (inc_address, _) = Self::unpack_str(rest, 148)?;
+                let (inc_address, _) = Self::unpack_bytes148(rest)?;
                 Self::Shield {
                     amount,
-                    inc_address
+                    inc_address: *inc_address
                 }
             },
             1 => {
@@ -143,6 +144,20 @@ impl BridgeInstruction {
         Ok((output.to_string(), rest))
     }
 
+    fn unpack_bytes148(input: &[u8]) -> Result<(&[u8; 148], &[u8]), ProgramError> {
+        if input.len() < 148 {
+            msg!("148 bytes cannot be unpacked");
+            return Err(InstructionUnpackError.into());
+        }
+        let (bytes, rest) = input.split_at(32);
+        Ok((
+            bytes
+                .try_into()
+                .map_err(|_| InstructionUnpackError)?,
+            rest,
+        ))
+    }
+
     fn unpack_u8(input: &[u8]) -> Result<(u8, &[u8]), ProgramError> {
         if input.is_empty() {
             msg!("u8 cannot be unpacked");
@@ -221,4 +236,63 @@ impl BridgeInstruction {
         let pk = Pubkey::new(key);
         Ok((pk, rest))
     }
+
+    // pub fn pack(&self) -> Vec<u8> {
+    //     let mut buf = Vec::with_capacity(size_of::<Self>());
+    //     match *self {
+    //         Self::Shield {
+    //             amount,
+    //             inc_address,
+    //         } => {
+    //             buf.push(0);
+    //             buf.extend_from_slice(owner.as_ref());
+    //             buf.extend_from_slice(quote_currency.as_ref());
+    //         }
+    //         Self::UnShield {
+    //
+    //         } => {
+    //             buf.push(1);
+    //             buf.extend_from_slice(new_owner.as_ref());
+    //         }
+    //         Self::InitBeacon {
+    //             liquidity_amount,
+    //             config:
+    //             ReserveConfig {
+    //                 optimal_utilization_rate,
+    //                 loan_to_value_ratio,
+    //                 liquidation_bonus,
+    //                 liquidation_threshold,
+    //                 min_borrow_rate,
+    //                 optimal_borrow_rate,
+    //                 max_borrow_rate,
+    //                 fees:
+    //                 ReserveFees {
+    //                     borrow_fee_wad,
+    //                     flash_loan_fee_wad,
+    //                     host_fee_percentage,
+    //                 },
+    //                 deposit_limit,
+    //                 borrow_limit,
+    //                 fee_receiver,
+    //             },
+    //         } => {
+    //             buf.push(2);
+    //             buf.extend_from_slice(&liquidity_amount.to_le_bytes());
+    //             buf.extend_from_slice(&optimal_utilization_rate.to_le_bytes());
+    //             buf.extend_from_slice(&loan_to_value_ratio.to_le_bytes());
+    //             buf.extend_from_slice(&liquidation_bonus.to_le_bytes());
+    //             buf.extend_from_slice(&liquidation_threshold.to_le_bytes());
+    //             buf.extend_from_slice(&min_borrow_rate.to_le_bytes());
+    //             buf.extend_from_slice(&optimal_borrow_rate.to_le_bytes());
+    //             buf.extend_from_slice(&max_borrow_rate.to_le_bytes());
+    //             buf.extend_from_slice(&borrow_fee_wad.to_le_bytes());
+    //             buf.extend_from_slice(&flash_loan_fee_wad.to_le_bytes());
+    //             buf.extend_from_slice(&host_fee_percentage.to_le_bytes());
+    //             buf.extend_from_slice(&deposit_limit.to_le_bytes());
+    //             buf.extend_from_slice(&borrow_limit.to_le_bytes());
+    //             buf.extend_from_slice(&fee_receiver.to_bytes());
+    //         }
+    //     }
+    //     buf
+    // }
 }

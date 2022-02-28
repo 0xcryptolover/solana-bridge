@@ -1,21 +1,24 @@
-#![cfg(feature = "test-bpf")]
+// #![cfg(feature = "test-bpf")]
 
-use {
-    assert_matches::*,
-    solana_program::{
-        instruction::{AccountMeta, Instruction},
-        pubkey::Pubkey,
-    },
-    solana_sdk::{signature::Signer, transaction::Transaction},
-    solana_validator::test_validator::*,
+// mod test_shield;
+// mod helpers;
+
+use borsh::BorshDeserialize;
+use solana_program_test::*;
+use solana_sdk::{
+    account::Account,
+    instruction::{AccountMeta, Instruction},
+    pubkey::Pubkey,
+    signature::Signer,
+    transaction::Transaction,
 };
+use std::mem;
 use solana_bridge::{
     instruction::BridgeInstruction,
     processor::process_instruction,
     state::{IncognitoProxy, MAX_BEACON_ADDRESSES},
 };
 use spl_token::instruction::approve;
-use solana_program_test::*;
 
 #[tokio::test]
 async fn test_unshield_success() {
@@ -27,13 +30,25 @@ async fn test_unshield_success() {
     let incognito_proxy = Pubkey::new_unique();
 
     let mut test = ProgramTest::new(
-        "incognito_vault",
+        "bridge_solana",
         program_id,
         processor!(process_instruction),
     );
 
     // limit to track compute unit increase
     test.set_compute_max_units(38_000);
+
+    test.add_account(
+        incognito_proxy,
+        Account {
+            lamports: 5,
+            data: vec![0_u8; mem::size_of::<u32>()],
+            owner: program_id,
+            ..Account::default()
+        },
+    );
+
+    let (mut banks_client, payer, recent_blockhash) = test.start().await;
 
     // let mut transaction = Transaction::new_with_payer(
     //     &[

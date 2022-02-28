@@ -44,7 +44,7 @@ pub fn process_instruction(
 fn process_shield(
     accounts: &[AccountInfo],
     amount: u64,
-    inc_address: String,
+    inc_address: [u8; 148],
     program_id: &Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
@@ -55,7 +55,6 @@ fn process_shield(
     }
     let shield_maker_token_account = next_account_info(account_info_iter)?;
     let vault_token_account = next_account_info(account_info_iter)?;
-    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
 
@@ -82,7 +81,6 @@ fn process_shield(
         msg!("Send to wrong vault token account");
         return Err(ProgramError::IncorrectProgramId);
     }
-    assert_rent_exempt(rent, vault_token_account)?;
 
     spl_token_transfer(TokenTransferParams {
         source: shield_maker_token_account.clone(),
@@ -93,7 +91,7 @@ fn process_shield(
         token_program: token_program.clone(),
     })?;
 
-    msg!("Issue pToken to address {}, token {}", inc_address, token_program.key);
+    msg!("Issue pToken to address {:?}, token {}", inc_address , token_program.key);
 
     Ok(())
 

@@ -25,6 +25,7 @@ impl Vault {
 pub const MAX_BEACON_ADDRESSES: usize = 20;
 
 // Incognito proxy stores beacon list
+#[derive(Clone, Default, PartialEq)]
 pub struct IncognitoProxy {
     // init beacon 
     pub is_initialized: bool,
@@ -39,6 +40,23 @@ pub struct IncognitoProxy {
 impl IsInitialized for IncognitoProxy {
     fn is_initialized(&self) -> bool {
         self.is_initialized
+    }
+}
+
+impl IncognitoProxy {
+    /// Create a new lending market
+    pub fn new(params: IncognitoProxy) -> Self {
+        let mut incognito_proxy = Self::default();
+        Self::init(&mut incognito_proxy, params);
+        incognito_proxy
+    }
+
+    /// Initialize a lending market
+    pub fn init(&mut self, params: IncognitoProxy) {
+        self.is_initialized = params.is_initialized;
+        self.bump_seed = params.bump_seed;
+        self.vault = params.vault;
+        self.beacons = params.beacons;
     }
 }
 
