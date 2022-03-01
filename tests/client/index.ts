@@ -87,6 +87,8 @@ const shieldMaker = Keypair.fromSecretKey(
     //     console.log(`txhash: ${await connection.sendTransaction(tx, [feePayer])}`);
     // }
     const shieldMakerAccount = new PublicKey("5397KrEBCuEhdTjWF5B9xjVzGJR6MyxXLP3srbrWo2gD");
+    console.log("shield maker ", shieldMakerAccount.toBytes());
+    console.log("token id ", mintPubkey.toBytes());
     const shield_amount = 10000;
     // mint token to shield maker token account
     {
@@ -169,10 +171,10 @@ const shieldMaker = Keypair.fromSecretKey(
 
     // init beacon list address
     let beaconLength = 4;
-    let beacon1 = [56,113,154,72,142,214,4,86,146,209,161,104,224,17,230,211,240,58,143,214,103,9,128,66,238,127,62,94,149,61,53,1,66,127,16,126,46,76,44,126,27,53,13,138,122,213,194,239,32,16,176,204,86,18,27,201,19,123,12,229,109,168,204,215];
-    let beacon2 = [150,131,62,220,240,210,24,183,177,57,182,208,244,132,222,179,100,251,3,51,223,229,186,2,167,111,57,78,234,116,226,58,217,251,185,113,97,147,50,18,20,82,72,76,125,90,123,80,134,6,210,31,149,252,37,185,134,120,24,220,6,243,130,247];
-    let beacon3 = [208,121,174,213,10,62,123,226,92,9,250,224,110,91,44,0,52,69,143,10,183,237,177,157,79,254,205,60,152,126,118,162,38,189,95,98,118,225,51,179,235,169,96,237,163,87,130,32,4,75,229,35,136,122,169,63,111,130,173,42,0,198,246,218];
-    let beacon4 = [112,91,141,40,135,215,31,151,70,51,32,239,68,209,137,181,202,119,101,135,227,115,119,195,44,122,216,205,4,213,204,153,80,245,192,136,5,238,118,251,20,150,28,97,51,181,177,8,237,88,14,17,19,96,3,50,208,204,212,193,240,73,231,185];
+    let beacon1 = [64,206,253,84,56,206,63,162,157,152,148,80,198,23,66,245,43,1,207,238,9,144,161,139,131,44,146,136,74,242,22,220,187,130,145,153,93,114,117,199,108,190,233,244,53,240,247,48,207,19,94,245,14,171,207,124,157,177,173,139,253,237,36,168];
+    let beacon2 = [175,109,126,18,52,108,137,78,38,252,216,214,224,214,44,187,2,67,70,204,196,78,155,224,72,126,124,128,134,165,210,158,138,93,62,90,76,225,186,39,215,204,170,10,127,99,86,220,107,251,34,58,235,236,69,189,235,226,57,208,106,210,28,22];
+    let beacon3 = [122,69,179,100,37,117,17,36,0,4,211,125,150,102,106,180,218,127,238,200,104,84,250,183,23,31,209,229,22,117,248,73,56,120,112,2,188,187,152,44,70,228,25,160,250,255,40,216,180,239,183,235,175,79,66,41,119,82,195,70,103,102,135,73];
+    let beacon4 = [24,171,11,173,118,80,213,52,20,186,77,213,182,249,188,70,15,37,228,129,102,45,183,139,139,174,147,32,130,179,168,171,36,79,30,237,44,11,200,229,108,224,117,224,206,11,62,235,127,101,194,116,209,213,122,41,77,229,19,60,199,168,81,25];
 
     let pubkeyArray:number[] = Array.from(vaultAccount.publicKey.toBytes());
     const init_beacon_instruction = new TransactionInstruction({
@@ -195,13 +197,14 @@ const shieldMaker = Keypair.fromSecretKey(
         ),
     });
     console.log("Beacon instruction length: ", init_beacon_instruction.data.length);
+    // todo: query beacon state before init
     // create transaction init beacon list
-    const trans_init_beacon = await setPayerAndBlockhashTransaction(
-        [init_beacon_instruction]
-    );
-    const signature_init_beacon = await signAndSendTransaction(trans_init_beacon, [feePayer]);
-    const result_init_beacon = await connection.confirmTransaction(signature_init_beacon);
-    console.log(`init beacon txhash: ${result_init_beacon}`);
+    // const trans_init_beacon = await setPayerAndBlockhashTransaction(
+    //     [init_beacon_instruction]
+    // );
+    // const signature_init_beacon = await signAndSendTransaction(trans_init_beacon, [feePayer]);
+    // const result_init_beacon = await connection.confirmTransaction(signature_init_beacon);
+    // console.log(`init beacon txhash: ${result_init_beacon}`);
 
     console.log("=============== Make shield request =================");
 
@@ -231,6 +234,11 @@ const shieldMaker = Keypair.fromSecretKey(
     const result = await connection.confirmTransaction(signature);
     console.log("end sendMessage", result);
 
+    console.log("=============== Make unshield request =================");
+    // create data
+    let inst = [155,1,59,251,20,8,169,41,14,126,217,202,208,133,245,194,62,249,144,33,114,189,69,8,203,236,33,202,139,252,22,182,84,166,197,111,46,11,236,137,61,81,37,248,63,18,210,220,135,170,35,25,197,242,222,184,44,97,54,230,121,239,31,201,122,75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,232,212,165,16,0,218,218,59,96,247,89,143,67,179,251,104,63,20,45,224,26,244,203,252,156,144,15,98,190,253,108,186,51,209,228,23,182,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+    let height = 1;
+    let inst_path_length
 })();
 
 

@@ -143,10 +143,10 @@ impl Pack for IncognitoProxy {
 }
 
 /// Reserve liquidity
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UnshieldRequest {
     // instruction in bytes
-    pub inst: String,
+    pub inst: [u8; 162],
     // beacon height
     pub height: u64,
     // inst paths to build merkle tree

@@ -16,7 +16,7 @@ use spl_token::state::Account as TokenAccount;
 use arrayref::{array_refs, array_ref};
 use crate::{error::BridgeError, instruction::BridgeInstruction, state::{Vault, UnshieldRequest, IncognitoProxy}};
 
-const LEN: usize = 1 + 1 + 32 + 32 + 8 + 32;
+const LEN: usize = 1 + 1 + 32 + 32 + 32 + 32; // ignore last 32 bytes in instruction
 
 pub fn process_instruction(
         program_id: &Pubkey,
@@ -111,11 +111,6 @@ fn process_unshield(
     program_id: &Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    let unshield_maker = next_account_info(account_info_iter)?;
-
-    if !unshield_maker.is_signer {
-        return Err(ProgramError::MissingRequiredSignature);
-    }
     let vault_token_account = next_account_info(account_info_iter)?;
     let vault_authority_account = next_account_info(account_info_iter)?;
     let vault_account = next_account_info(account_info_iter)?;
@@ -135,7 +130,7 @@ fn process_unshield(
     }
 
     // extract data from input
-    let inst = unshield_info.inst.as_bytes();
+    let inst = unshield_info.inst;
     if inst.len() < LEN {
         msg!("Invalid instruction input");
         return Err(BridgeError::InvalidBeaconInstruction.into());
@@ -147,6 +142,7 @@ fn process_unshield(
         shard_id,
         token,
         receiver_key,
+        _,
         unshield_amount,
         tx_id, // store this data
     ) = array_refs![
@@ -155,6 +151,7 @@ fn process_unshield(
         1,
         32,
         32,
+        24,
         8,
         32
     ];
@@ -263,10 +260,11 @@ fn process_init_beacon(
         return Err(ProgramError::IncorrectProgramId);
     }
     let mut incognito_proxy_info = IncognitoProxy::unpack_from_slice(&incognito_proxy.try_borrow_data()?)?;
-    if incognito_proxy_info.is_initialized {
-        msg!("Beacon initialized");
-        return Err(BridgeError::BeaconsInitialized.into());
-    }
+    // todo: uncomment in production
+    // if incognito_proxy_info.is_initialized {
+    //     msg!("Beacon initialized");
+    //     return Err(BridgeError::BeaconsInitialized.into());
+    // }
     incognito_proxy_info.is_initialized = init_beacon_info.is_initialized;
     incognito_proxy_info.bump_seed = init_beacon_info.bump_seed;
     incognito_proxy_info.vault = init_beacon_info.vault;

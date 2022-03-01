@@ -53,8 +53,7 @@ impl BridgeInstruction {
                 }
             },
             1 => {
-                let (inst_len, rest) = Self::unpack_u8(rest)?;
-                let (inst, rest) =  Self::unpack_str(rest, inst_len as usize)?;
+                let (inst, rest) =  Self::unpack_bytes162(rest)?;
                 let (height, rest) = Self::unpack_u64(rest)?;
                 let (inst_paths_len,mut rest) = Self::unpack_u8(rest)?;
                 let mut inst_paths = Vec::with_capacity(inst_paths_len as usize + 1);
@@ -88,7 +87,7 @@ impl BridgeInstruction {
                 }
                 Self::UnShield {
                     unshield_info: UnshieldRequest {
-                        inst,
+                        inst: *inst,
                         height,
                         inst_paths,
                         inst_path_is_lefts,
@@ -137,14 +136,18 @@ impl BridgeInstruction {
         Ok((value, rest))
     }
 
-    fn unpack_str(input: &[u8], len: usize) -> Result<(String, &[u8]), ProgramError> {
-        if input.len() < len {
-            msg!("inc address cannot be unpacked");
+    fn unpack_bytes162(input: &[u8]) -> Result<(&[u8; 162], &[u8]), ProgramError> {
+        if input.len() < 162 {
+            msg!("162 bytes cannot be unpacked");
             return Err(InstructionUnpackError.into());
         }
-        let (bytes, rest) = input.split_at(len);
-        let output = String::from_utf8_lossy(bytes);
-        Ok((output.to_string(), rest))
+        let (bytes, rest) = input.split_at(162);
+        Ok((
+            bytes
+                .try_into()
+                .map_err(|_| InstructionUnpackError)?,
+            rest,
+        ))
     }
 
     fn unpack_bytes148(input: &[u8]) -> Result<(&[u8; 148], &[u8]), ProgramError> {
