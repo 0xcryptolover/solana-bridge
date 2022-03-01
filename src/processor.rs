@@ -262,8 +262,8 @@ fn process_init_beacon(
         msg!("Invalid incognito proxy");
         return Err(ProgramError::IncorrectProgramId);
     }
-    let mut incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
-    if incognito_proxy_info.is_initialized() {
+    let mut incognito_proxy_info = IncognitoProxy::unpack_from_slice(&incognito_proxy.try_borrow_data()?)?;
+    if incognito_proxy_info.is_initialized {
         msg!("Beacon initialized");
         return Err(BridgeError::BeaconsInitialized.into());
     }

@@ -7,6 +7,8 @@ use solana_program::{
 use std::{collections::BTreeMap};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use borsh::{BorshSerialize, BorshDeserialize};
+use crate::error::BridgeError;
+use crate::instruction::BridgeInstruction;
 
 /// ====== INCOGNITO VAULT =======
 #[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
@@ -63,7 +65,7 @@ impl IncognitoProxy {
 impl Sealed for IncognitoProxy {}
 
 impl Pack for IncognitoProxy {
-    /// 1 + 32 + 1 + 64 * 20 
+    /// 1 + 1 + 32 + 1 + 64 * 20
     const LEN: usize = 1315;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, IncognitoProxy::LEN];
@@ -84,7 +86,7 @@ impl Pack for IncognitoProxy {
         let is_initialized = match is_initialized {
             [0] => false,
             [1] => true,
-            _ => return Err(ProgramError::InvalidAccountData),
+            _ => return Err(BridgeError::InvalidBoolValue.into()),
         };
 
         let beacon_len = u8::from_le_bytes(*beacon_len);

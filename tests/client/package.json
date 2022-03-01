@@ -10,6 +10,7 @@
     "typescript": "^4.6.2"
   },
   "scripts": {
-    "start": "npx ts-node index.ts"
+    "start": "npx ts-node index.ts",
+    "deploy": "cargo build-bpf && solana program deploy /Users/Macbook_Atonomous/Documents/solana-bridge/target/deploy/solana_bridge.so --program-id BKGhwbiTHdUxcuWzZtDWyioRBieDEXTtgEk8u1zskZnk"
   }
 }

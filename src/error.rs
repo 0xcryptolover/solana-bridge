@@ -42,6 +42,9 @@ pub enum BridgeError {
     /// Invalid beacon signature
     #[error("Invalid beacon signature")]
     InvalidBeaconSignature,
+    /// Invalid bool value
+    #[error("Invalid bool value")]
+    InvalidBoolValue,
 }
 
 impl From<BridgeError> for ProgramError {

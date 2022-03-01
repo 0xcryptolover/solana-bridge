@@ -14,6 +14,7 @@ use crate::state::{
     IncognitoProxy,
 };
 use std::{convert::TryInto, mem::size_of};
+use crate::error::BridgeError;
 use crate::instruction::BridgeInstruction::Shield;
 
 pub enum BridgeInstruction {
@@ -204,7 +205,7 @@ impl BridgeInstruction {
 
     fn unpack_bytes64(input: &[u8]) -> Result<(&[u8; 64], &[u8]), ProgramError> {
         if input.len() < 64 {
-            msg!("64 bytes cannot be unpacked");
+            msg!("64 bytes cannot be unpacked {:?}", input);
             return Err(InstructionUnpackError.into());
         }
         let (bytes, rest) = input.split_at(64);
@@ -224,7 +225,7 @@ impl BridgeInstruction {
             1 => Ok((false, rest)),
             _ => {
                 msg!("Boolean cannot be unpacked");
-                Err(ProgramError::InvalidAccountData)
+                Err(BridgeError::InvalidBoolValue.into())
             }
         }
     }
