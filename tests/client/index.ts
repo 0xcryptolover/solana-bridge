@@ -89,7 +89,7 @@ const shieldMaker = Keypair.fromSecretKey(
     const shieldMakerAccount = new PublicKey("5397KrEBCuEhdTjWF5B9xjVzGJR6MyxXLP3srbrWo2gD");
     console.log("shield maker ", shieldMakerAccount.toBytes());
     console.log("token id ", mintPubkey.toBytes());
-    const shield_amount = 10000;
+    const shield_amount = 1e12;
     // mint token to shield maker token account
     {
         let txhash = await mintToChecked(
@@ -98,7 +98,7 @@ const shieldMaker = Keypair.fromSecretKey(
             mintPubkey, // mint
             shieldMakerAccount, // receiver (sholud be a token account)
             shieldMaker, // mint authority
-            100e8, // amount. if your decimals is 8, you mint 10^8 for 1 token.
+            1e12, // amount. if your decimals is 8, you mint 10^8 for 1 token.
             8 // decimals
         );
         console.log(`txhash: ${txhash}`);
@@ -258,8 +258,53 @@ const shieldMaker = Keypair.fromSecretKey(
         [240,52,229,173,211,50,154,27,201,224,129,8,41,131,145,99,24,235,220,20,226,53,181,63,26,159,65,176,237,83,222,194,51,190,201,48,17,1,105,216,2,42,20,177,104,117,135,156,92,92,7,178,204,5,185,45,223,49,36,18,48,112,3,178,27]
     ];
     // =====
+    const instruction_unshield = new TransactionInstruction({
+        keys: [
+            {pubkey: vaultTokenAcc, isSigner: false, isWritable: true},
+            {pubkey: shieldMakerAccount, isSigner: false, isWritable: true},
+            {pubkey: vaultTokenAuthority, isSigner: false, isWritable: false},
+            {pubkey: vaultAccount.publicKey, isSigner: false, isWritable: false},
+            {pubkey: incognitoProxy.publicKey, isSigner: false, isWritable: false},
+            {pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false},
+        ],
+        programId,
+        data: Buffer.from(
+            Uint8Array.of(
+                1,
+                ...inst,
+                ...new BN(height).toArray("le", 8),
+                ...new BN(inst_paths.length).toArray("le", 1),
+                ...inst_paths[0],
+                ...inst_paths[1],
+                ...inst_paths[2],
+                ...inst_paths[3],
+                ...new BN(inst_path_is_lefts.length).toArray("le", 1),
+                ...new BN(inst_path_is_lefts[0] ? 1 : 0).toArray("le", 1),
+                ...new BN(inst_path_is_lefts[1] ? 1 : 0).toArray("le", 1),
+                ...new BN(inst_path_is_lefts[2] ? 1 : 0).toArray("le", 1),
+                ...new BN(inst_path_is_lefts[3] ? 1 : 0).toArray("le", 1),
+                ...inst_root,
+                ...blkdata,
+                ...new BN(index.length).toArray("le", 1),
+                ...new BN(index[0]).toArray("le", 1),
+                ...new BN(index[1]).toArray("le", 1),
+                ...new BN(index[2]).toArray("le", 1),
+                ...new BN(index[3]).toArray("le", 1),
+                ...new BN(signatures.length).toArray("le", 1),
+                ...signatures[0],
+                ...signatures[1],
+                ...signatures[2],
+                ...signatures[3],
+            )
+        ),
+    });
 
-
+    const unshield_trans = await setPayerAndBlockhashTransaction(
+        [instruction_unshield]
+    );
+    const unshield_signature = await signAndSendTransaction(unshield_trans, [feePayer]);
+    const unshield_result = await connection.confirmTransaction(unshield_signature);
+    console.log("end sendMessage ", unshield_result);
 
 })();
 

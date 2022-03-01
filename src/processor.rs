@@ -112,10 +112,10 @@ fn process_unshield(
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let vault_token_account = next_account_info(account_info_iter)?;
+    let unshield_token_account = next_account_info(account_info_iter)?;
     let vault_authority_account = next_account_info(account_info_iter)?;
     let vault_account = next_account_info(account_info_iter)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
-    let unshield_token_account = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
     let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
 
