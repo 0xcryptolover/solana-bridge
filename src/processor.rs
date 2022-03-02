@@ -68,7 +68,6 @@ fn process_shield(
     }
     let vault_token_account_info = TokenAccount::unpack(&vault_token_account.try_borrow_data()?)?;
     let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
-    msg!("bump seed {}", incognito_proxy_info.bump_seed);
     let authority_signer_seeds = &[
         incognito_proxy.key.as_ref(),
         &[incognito_proxy_info.bump_seed],
@@ -114,17 +113,18 @@ fn process_unshield(
     let vault_token_account = next_account_info(account_info_iter)?;
     let unshield_token_account = next_account_info(account_info_iter)?;
     let vault_authority_account = next_account_info(account_info_iter)?;
-    // let vault_account = next_account_info(account_info_iter)?;
+    let vault_account = next_account_info(account_info_iter)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
-    let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
+    let incognito_proxy_info = IncognitoProxy::unpack_unchecked(&incognito_proxy.data.borrow())?;
+    if !incognito_proxy_info.is_initialized() {
+       return Err(BridgeError::BeaconsUnInitialized.into())
+    }
 
-    // if incognito_proxy_info.vault != *vault_account.key {
-    //     msg!("Send to wrong vault account");
-    //     msg!("{}", incognito_proxy_info.vault);
-    //     msg!("{}", vault_account.key);
-    //     return Err(ProgramError::IncorrectProgramId);
-    // }
+    if incognito_proxy_info.vault != *vault_account.key {
+        msg!("Send to wrong vault account");
+        return Err(ProgramError::IncorrectProgramId);
+    }
 
     if incognito_proxy.owner != program_id {
         msg!("Invalid incognito proxy");
@@ -144,7 +144,7 @@ fn process_unshield(
         shard_id,
         token,
         receiver_key,
-        _,
+        test,
         unshield_amount,
         tx_id, // store this data
     ) = array_refs![
@@ -161,7 +161,7 @@ fn process_unshield(
     let shard_id = u8::from_le_bytes(*shard_id);
     let token_key = Pubkey::new(token);
     let receiver_key = Pubkey::new(receiver_key);
-    let unshield_amount = u64::from_le_bytes(*unshield_amount);
+    let unshield_amount_u64 = u64::from_be_bytes(*unshield_amount);
 
     // validate metatype and key provided
     if meta_type != 155 || shard_id != 1 {
@@ -208,9 +208,9 @@ fn process_unshield(
             v[0],
             s_r,
         ).unwrap();
-        let beacon_key = incognito_proxy_info.beacons[unshield_info.indexes[i] as usize];
+        let index_beacon = unshield_info.indexes[i];
+        let beacon_key = incognito_proxy_info.beacons[index_beacon as usize];
         if beacon_key_from_signature_result != beacon_key {
-            msg!("Invalid beacon signature expected {:?} got {:?}", beacon_key.to_bytes(), beacon_key_from_signature_result.to_bytes());
             return Err(BridgeError::InvalidBeaconSignature.into());
         }
     }
@@ -240,10 +240,17 @@ fn process_unshield(
         return Err(BridgeError::InvalidTokenAuthority.into());
     }
 
+    let vault_token_account_info = TokenAccount::unpack(&vault_token_account.try_borrow_data()?)?;
+
+    if vault_token_account_info.owner != vault_authority_pubkey {
+        msg!("Invalid vault token account owner");
+        return Err(BridgeError::InvalidAccountOwner.into());
+    }
+
     spl_token_transfer(TokenTransferParams {
         source: vault_token_account.clone(),
         destination: unshield_token_account.clone(),
-        amount: unshield_amount,
+        amount: unshield_amount_u64,
         authority: vault_authority_account.clone(),
         authority_signer_seeds,
         token_program: token_program.clone(),
@@ -260,16 +267,19 @@ fn process_init_beacon(
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let initalizer = next_account_info(account_info_iter)?;
+    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;;
 
     if !initalizer.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
     }
     let incognito_proxy = next_account_info(account_info_iter)?;
+    assert_rent_exempt(rent, incognito_proxy)?;
+    let mut incognito_proxy_info = assert_uninitialized::<IncognitoProxy>(incognito_proxy)?;
     if incognito_proxy.owner != program_id {
         msg!("Invalid incognito proxy");
         return Err(ProgramError::IncorrectProgramId);
     }
-    let mut incognito_proxy_info = IncognitoProxy::unpack_from_slice(&incognito_proxy.try_borrow_data()?)?;
+
     // todo: uncomment in production
     // if incognito_proxy_info.is_initialized {
     //     msg!("Beacon initialized");
@@ -345,4 +355,15 @@ struct TokenTransferParams<'a: 'b, 'b> {
     authority: AccountInfo<'a>,
     authority_signer_seeds: &'b [&'b [u8]],
     token_program: AccountInfo<'a>,
+}
+
+fn assert_uninitialized<T: Pack + IsInitialized>(
+    account_info: &AccountInfo,
+) -> Result<T, ProgramError> {
+    let account: T = T::unpack_unchecked(&account_info.data.borrow())?;
+    if account.is_initialized() {
+        Err(BridgeError::BeaconsInitialized.into())
+    } else {
+        Ok(account)
+    }
 }

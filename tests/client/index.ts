@@ -1,4 +1,4 @@
-import { clusterApiUrl, Connection, Keypair, Transaction, SystemProgram, PublicKey, sendAndConfirmTransaction, TransactionInstruction } from "@solana/web3.js";
+import { clusterApiUrl, Connection, Keypair, Transaction, SystemProgram, PublicKey, sendAndConfirmTransaction, TransactionInstruction, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
 import {
     createInitializeMintInstruction,
     TOKEN_PROGRAM_ID,
@@ -125,8 +125,9 @@ const shieldMaker = Keypair.fromSecretKey(
     );
     console.log(`incognito proxy: ${incognitoProxy.publicKey.toBase58()}`);
 
-    const vaultAccount = Keypair.generate();
-    console.log("vault account ", vaultAccount.publicKey.toBase58());
+    // const vaultAccount = Keypair.generate();
+    const vaultAccount = new PublicKey("FmARrhNZxzA6aPXGuxeM71DMTzwMUYxqvpC8kh1pLR8Y");
+    console.log("vault account ", vaultAccount.toBase58());
     // const beaconLength = 1315;
     // const lamportsExempt = await connection.getMinimumBalanceForRentExemption(beaconLength, 'confirmed');
     //
@@ -150,6 +151,7 @@ const shieldMaker = Keypair.fromSecretKey(
         programId,
     );
     console.log("bump seed ", bumpInit);
+    console.log("vault token authority ", vaultTokenAuthority.toBase58());
     // let vaultTokenAcc = await getAssociatedTokenAddress(
     //     mintPubkey, // mint
     //     vaultTokenAuthority, // owner
@@ -177,7 +179,7 @@ const shieldMaker = Keypair.fromSecretKey(
     let beacon3 = [122,69,179,100,37,117,17,36,0,4,211,125,150,102,106,180,218,127,238,200,104,84,250,183,23,31,209,229,22,117,248,73,56,120,112,2,188,187,152,44,70,228,25,160,250,255,40,216,180,239,183,235,175,79,66,41,119,82,195,70,103,102,135,73];
     let beacon4 = [24,171,11,173,118,80,213,52,20,186,77,213,182,249,188,70,15,37,228,129,102,45,183,139,139,174,147,32,130,179,168,171,36,79,30,237,44,11,200,229,108,224,117,224,206,11,62,235,127,101,194,116,209,213,122,41,77,229,19,60,199,168,81,25];
 
-    let temp = vaultAccount.publicKey.toBytes();
+    let temp = vaultAccount.toBytes();
     let pubkeyArray:number[] = Array.from(temp);
     console.log("Vault account key");
     console.log(temp);
@@ -185,6 +187,7 @@ const shieldMaker = Keypair.fromSecretKey(
     const init_beacon_instruction = new TransactionInstruction({
         keys: [
             {pubkey: feePayer.publicKey, isSigner: true, isWritable: false},
+            {pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false},
             {pubkey: incognitoProxy.publicKey, isSigner: false, isWritable: true},
         ],
         programId,
@@ -241,7 +244,7 @@ const shieldMaker = Keypair.fromSecretKey(
 
     console.log("=============== Make unshield request =================");
     // create data
-    let inst = [155,1,197,111,46,11,236,137,61,81,37,248,63,18,210,220,135,170,35,25,197,242,222,184,44,97,54,230,121,239,31,201,122,75,59,251,20,8,169,41,14,126,217,202,208,133,245,194,62,249,144,33,114,189,69,8,203,236,33,202,139,252,22,182,84,166,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,232,212,165,16,0,221,34,108,139,101,26,185,224,212,244,46,221,129,15,110,222,130,208,191,110,239,248,22,202,136,246,46,190,61,252,146,176,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+    let inst = [155,1,197,111,46,11,236,137,61,81,37,248,63,18,210,220,135,170,35,25,197,242,222,184,44,97,54,230,121,239,31,201,122,75,59,251,20,8,169,41,14,126,217,202,208,133,245,194,62,249,144,33,114,189,69,8,203,236,33,202,139,252,22,182,84,166,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,232,4,3,247,194,148,206,163,217,231,230,232,229,27,1,180,194,106,184,162,71,251,127,163,218,231,218,26,131,44,118,44,46,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
     let height = 1;
     // =====
     let inst_paths = [[230,184,120,45,145,71,239,155,84,73,101,255,16,237,227,249,93,245,68,65,52,188,45,171,214,48,218,58,142,126,159,241],
@@ -255,7 +258,7 @@ const shieldMaker = Keypair.fromSecretKey(
     let inst_root = [7,169,244,251,166,215,250,217,140,251,162,81,245,74,209,160,7,248,255,76,108,60,61,23,109,24,25,83,168,226,21,24];
     let blkdata = [226,20,215,231,248,45,212,100,71,96,146,232,198,6,192,176,112,222,168,4,216,73,176,56,59,166,76,79,247,48,196,231];
     // ====
-    let index = [1, 2, 3, 4]
+    let index = [0, 1, 2, 3]
     let signatures = [
         [3,187,120,11,108,18,253,108,227,230,220,165,168,161,190,175,135,80,191,45,10,66,167,84,231,6,184,94,157,137,69,145,57,43,58,134,34,59,33,25,101,171,231,215,234,194,76,86,67,200,202,238,9,109,165,119,184,2,49,145,190,198,54,79,1],
         [40,70,244,121,37,135,158,8,152,60,255,245,170,178,29,10,207,62,0,96,68,24,106,112,72,78,92,0,86,243,84,74,117,217,128,191,13,24,223,179,145,193,171,126,241,124,8,231,228,107,227,241,49,119,129,150,81,178,102,70,105,98,124,176,1],
@@ -268,7 +271,7 @@ const shieldMaker = Keypair.fromSecretKey(
             {pubkey: vaultTokenAcc, isSigner: false, isWritable: true},
             {pubkey: shieldMakerAccount, isSigner: false, isWritable: true},
             {pubkey: vaultTokenAuthority, isSigner: false, isWritable: false},
-            // {pubkey: vaultAccount.publicKey, isSigner: false, isWritable: false},
+            {pubkey: vaultAccount, isSigner: false, isWritable: false},
             {pubkey: incognitoProxy.publicKey, isSigner: false, isWritable: false},
             {pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false},
         ],

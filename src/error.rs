@@ -5,7 +5,7 @@ use solana_program::{decode_error::DecodeError, program_error::ProgramError};
 pub enum BridgeError {
     /// Invalid instruction
     #[error("Invalid Instruction")]
-    InvalidInstruction,
+    InvalidInstruction, // 0
     /// Not Rent Exempt
     #[error("Not Rent Exempt")]
     NotRentExempt,
@@ -20,7 +20,7 @@ pub enum BridgeError {
     InvalidAccountOwner,
     /// The list of beacon already initalized
     #[error("Beacons already initialized")]
-    BeaconsInitialized,
+    BeaconsInitialized, // 5
     /// Invalid instruction data passed in.
     #[error("Failed to unpack instruction data")]
     InstructionUnpackError,
@@ -35,7 +35,7 @@ pub enum BridgeError {
     InvalidBeaconInstruction,
     /// Invalid keys in instruction input
     #[error("Invalid keys in instruction input")]
-    InvalidKeysInInstruction,
+    InvalidKeysInInstruction, // 10
     /// Not enough signatures in inst provided
     #[error("Invalid number of signatures")]
     InvalidNumberOfSignature,
@@ -45,6 +45,9 @@ pub enum BridgeError {
     /// Invalid bool value
     #[error("Invalid bool value")]
     InvalidBoolValue,
+    /// Beacon uninit
+    #[error("Invalid incognito proxy account beacon uninit")]
+    BeaconsUnInitialized
 }
 
 impl From<BridgeError> for ProgramError {
