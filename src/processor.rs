@@ -114,15 +114,17 @@ fn process_unshield(
     let vault_token_account = next_account_info(account_info_iter)?;
     let unshield_token_account = next_account_info(account_info_iter)?;
     let vault_authority_account = next_account_info(account_info_iter)?;
-    let vault_account = next_account_info(account_info_iter)?;
+    // let vault_account = next_account_info(account_info_iter)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
     let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
 
-    if incognito_proxy_info.vault != *vault_account.key {
-        msg!("Send to wrong vault account");
-        return Err(ProgramError::IncorrectProgramId);
-    }
+    // if incognito_proxy_info.vault != *vault_account.key {
+    //     msg!("Send to wrong vault account");
+    //     msg!("{}", incognito_proxy_info.vault);
+    //     msg!("{}", vault_account.key);
+    //     return Err(ProgramError::IncorrectProgramId);
+    // }
 
     if incognito_proxy.owner != program_id {
         msg!("Invalid incognito proxy");
@@ -167,8 +169,9 @@ fn process_unshield(
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
 
-    if token_key != *token_program.key {
-        msg!("Token key and key provided not match {}, {}", token_key, *token_program.key);
+    let unshield_account_info = TokenAccount::unpack(&unshield_token_account.try_borrow_data()?)?;
+    if token_key != unshield_account_info.mint {
+        msg!("Token key and key provided not match {}, {}", token_key, unshield_account_info.mint);
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
 
@@ -188,28 +191,35 @@ fn process_unshield(
         return Err(BridgeError::InvalidNumberOfSignature.into());
     }
 
-    // append block height to instruction
-    let height_bytes = unshield_info.height.to_le_bytes();
-    let mut inst_vec = inst.to_vec();
-    inst_vec.extend_from_slice(&height_bytes);
-    let beacon_inst_hash = hash(&inst_vec[..]);
+    let mut blk_data_bytes = unshield_info.blk_data.to_vec();
+    blk_data_bytes.extend_from_slice(&unshield_info.inst_root);
+    // Get double block hash from instRoot and other data
+    let blk = hash(&hash(&blk_data_bytes[..]).to_bytes());
 
     for i in 0..unshield_info.indexes.len() {
         let s_r_v = unshield_info.signatures[i];
         let (s_r, v) = s_r_v.split_at(64);
+        if v.len() != 1 {
+            msg!("Invalid signature v input");
+            return Err(BridgeError::InvalidBeaconSignature.into());
+        }
         let beacon_key_from_signature_result = secp256k1_recover(
-            &beacon_inst_hash.to_bytes()[..],
+            &blk.to_bytes()[..],
             v[0],
             s_r,
-        );
-        let beacon_key_from_signature = beacon_key_from_signature_result.unwrap();
+        ).unwrap();
         let beacon_key = incognito_proxy_info.beacons[unshield_info.indexes[i] as usize];
-        if beacon_key_from_signature != beacon_key {
-            msg!("Invalid beacon signature");
+        if beacon_key_from_signature_result != beacon_key {
+            msg!("Invalid beacon signature expected {:?} got {:?}", beacon_key.to_bytes(), beacon_key_from_signature_result.to_bytes());
             return Err(BridgeError::InvalidBeaconSignature.into());
         }
     }
 
+    // todo: verify merkle tree
+    // append block height to instruction
+    // let height_bytes = unshield_info.height.to_le_bytes();
+    // let mut inst_vec = inst.to_vec();
+    // inst_vec.extend_from_slice(&height_bytes);
     // todo: store txid
 
     // prepare to transfer token to user
