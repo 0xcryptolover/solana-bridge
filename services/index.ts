@@ -26,6 +26,8 @@ const INCOGNIO_PROXY_KEY = "8WUP1RGTDTZGYBjkHQfjnwMbnnk25hnE6Du7vFpaq1QK";
 const SHIELD_INST = 'Shield';
 const UNSHIELD_INST = 'Unshield';
 
+var shieldDict = {} as any;
+
 // connection
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 (async () => {
@@ -57,6 +59,11 @@ function makeShield(result: any) {
         return;
     }
 
+    if (!result?.signature) {
+        console.log("invalid signature in tx: ", result?.signature);
+        return;
+    }
+
     console.log("========= extract data shield from tx ==========");
     let logs = result?.logs;
     if (logs == null || logs.length < 6) {
@@ -84,15 +91,23 @@ function makeShield(result: any) {
     }
 
     const incognitoProxy = shieldInfos[0];
-
     if (incognitoProxy != INCOGNIO_PROXY_KEY) {
         console.log(`invalid incognito proxy key expected ${INCOGNIO_PROXY_KEY} got ${incognitoProxy} `);
         return;
     }
+
+    // todo: query to db to check
+    if (shieldDict[result?.signature]) {
+        console.log("signature in tx existed: ", result?.signature);
+        return;
+    }
+    shieldDict[result?.signature] = true;
 
     const incAddress = shieldInfos[1];
     const token = shieldInfos[2];
     const amount = shieldInfos[3];
 
     console.log(`incognito proxy ${incognitoProxy} shield address ${incAddress} token ${token} amount ${amount}`);
+
+    // todo: call incognito rpc to shield
 }
