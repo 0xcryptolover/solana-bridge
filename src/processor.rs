@@ -11,7 +11,7 @@ use solana_program::{
     secp256k1_recover::secp256k1_recover,
     keccak::hash
 };
-
+use std::str;
 use spl_token::state::Account as TokenAccount;
 use arrayref::{array_refs, array_ref};
 use crate::{error::BridgeError, instruction::BridgeInstruction, state::{Vault, UnshieldRequest, IncognitoProxy}};
@@ -90,7 +90,7 @@ fn process_shield(
         token_program: token_program.clone(),
     })?;
 
-    msg!("Issue pToken to address {:?}, token {}", inc_address , token_program.key);
+    msg!("Issue pToken to incognitoproxy,address,token,amount:{},{},{},{}", incognito_proxy.key,str::from_utf8(&inc_address[..]).unwrap(), vault_token_account_info.mint, amount);
 
     Ok(())
 
@@ -164,7 +164,7 @@ fn process_unshield(
     let unshield_amount_u64 = u64::from_be_bytes(*unshield_amount);
 
     // validate metatype and key provided
-    if meta_type != 155 || shard_id != 1 {
+    if meta_type != 157 || shard_id != 1 {
         msg!("Invalid beacon instruction metatype {}, {}", meta_type, shard_id);
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
