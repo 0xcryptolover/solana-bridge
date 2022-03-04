@@ -14,9 +14,10 @@ use solana_program::{
 use std::str;
 use spl_token::state::Account as TokenAccount;
 use arrayref::{array_refs, array_ref};
-use crate::{error::BridgeError, instruction::BridgeInstruction, state::{Vault, UnshieldRequest, IncognitoProxy}};
+use crate::{error::BridgeError, instruction::BridgeInstruction, state::{UnshieldRequest, IncognitoProxy}};
 
 const LEN: usize = 1 + 1 + 32 + 32 + 32 + 32; // ignore last 32 bytes in instruction
+const ASC: [u8; 32] = [0x8c,0x97,0x25,0x8f,0x4e,0x24,0x89,0xf1,0xbb,0x3d,0x10,0x29,0x14,0x8e,0x0d,0x83,0x0b,0x5a,0x13,0x99,0xda,0xff,0x10,0x84,0x04,0x8e,0x7b,0xd8,0xdb,0xe9,0xf8,0x59];
 
 pub fn process_instruction(
         program_id: &Pubkey,
@@ -75,6 +76,21 @@ fn process_shield(
 
     let vault_authority_pubkey =
     Pubkey::create_program_address(authority_signer_seeds, program_id)?;
+
+    let asc_key = Pubkey::new(&ASC);
+    let incognio_proxy_associated_acc = Pubkey::find_program_address(
+        &[
+            &vault_authority_pubkey.to_bytes(),
+            &spl_token::id().to_bytes(),
+            &vault_token_account_info.mint.to_bytes(),
+        ],
+        &asc_key,
+    ).0;
+
+    if incognio_proxy_associated_acc != *vault_token_account.key {
+        msg!("Only send to incognito proxy account will be accepted");
+        return Err(ProgramError::IncorrectProgramId);
+    }
 
     if vault_token_account_info.owner != vault_authority_pubkey {
         msg!("Send to wrong vault token account");
@@ -144,9 +160,9 @@ fn process_unshield(
         shard_id,
         token,
         receiver_key,
-        test,
+        _,
         unshield_amount,
-        tx_id, // store this data
+        tx_id, // todo: store this data
     ) = array_refs![
         inst_,
         1,
@@ -267,7 +283,7 @@ fn process_init_beacon(
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let initalizer = next_account_info(account_info_iter)?;
-    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;;
+    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
 
     if !initalizer.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
@@ -367,3 +383,4 @@ fn assert_uninitialized<T: Pack + IsInitialized>(
         Ok(account)
     }
 }
+

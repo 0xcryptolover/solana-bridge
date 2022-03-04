@@ -8,7 +8,6 @@ use std::{collections::BTreeMap};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use borsh::{BorshSerialize, BorshDeserialize};
 use crate::error::BridgeError;
-use crate::instruction::BridgeInstruction;
 
 /// ====== INCOGNITO VAULT =======
 #[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]

@@ -15,7 +15,6 @@ use crate::state::{
 };
 use std::{convert::TryInto, mem::size_of};
 use crate::error::BridgeError;
-use crate::instruction::BridgeInstruction::Shield;
 
 pub enum BridgeInstruction {
 
