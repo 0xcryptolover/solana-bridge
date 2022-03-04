@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gagliardetto/solana-go"
+	associatedtokenaccount "github.com/gagliardetto/solana-go/programs/associated-token-account"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/thachtb/solana-bridge/services-go/Shield"
@@ -84,6 +85,30 @@ func main() {
 		panic(err)
 	}
 	sig, err := SignAndSendTx(tx, signers, rpcClient)
+	if err != nil {
+		panic(err)
+	}
+	spew.Dump(sig)
+	newKey := solana.NewWallet()
+
+	fmt.Println("============ TEST CREATE NEW ASSOCIATE TOKEN ACCOUNT =============")
+	mintPubkey := solana.MustPublicKeyFromBase58("EHheP6Wfyz65ve258TYQcfBHAAY4LsErnmXZozrgfvGr");
+
+	tx2, err := solana.NewTransaction(
+		[]solana.Instruction{
+			associatedtokenaccount.NewCreateInstruction(
+				feePayer.PublicKey(),
+				newKey.PublicKey(),
+				mintPubkey,
+			).Build(),
+		},
+		recent.Value.Blockhash,
+		solana.TransactionPayer(feePayer.PublicKey()),
+	)
+	signers2 := []solana.PrivateKey{
+		feePayer,
+	}
+	sig, err = SignAndSendTx(tx2, signers2, rpcClient)
 	if err != nil {
 		panic(err)
 	}
