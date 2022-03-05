@@ -232,9 +232,9 @@ fn process_unshield(
     }
 
     // append block height to instruction
-    let height_bytes = unshield_info.height.to_le_bytes();
+    let height_vec = append_at_top(unshield_info.height);
     let mut inst_vec = inst.to_vec();
-    inst_vec.extend_from_slice(&height_bytes);
+    inst_vec.extend_from_slice(&height_vec);
     let inst_hash = hash(&inst_vec[..]);
     if !instruction_in_merkle_tree(
         &inst_hash.to_bytes(),
@@ -242,6 +242,7 @@ fn process_unshield(
         &unshield_info.inst_paths,
         &unshield_info.inst_path_is_lefts
     ) {
+        msg!("Invalid instruction root");
         return Err(BridgeError::InvalidBeaconMerkleTree.into());
     }
 
@@ -422,3 +423,11 @@ fn instruction_in_merkle_tree(
     build_root == *root
 }
 
+fn append_at_top(input: u64) -> Vec<u8>  {
+    let mut  input_vec = input.to_be_bytes().to_vec();
+    for _ in 0..24 {
+        input_vec.insert(0, 0);
+    }
+
+    input_vec
+}

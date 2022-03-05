@@ -9,6 +9,7 @@ import (
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/thachtb/solana-bridge/services-go/Shield"
+	unshield2 "github.com/thachtb/solana-bridge/services-go/unshield"
 	"strings"
 )
 
@@ -64,11 +65,11 @@ func main() {
 	}
 
 	shieldInstruction := shield.NewShield(
-			incAddress,
-			shieldAmount,
-			program,
-			shieldAccounts,
-		)
+		incAddress,
+		shieldAmount,
+		program,
+		shieldAccounts,
+	)
 	shieldInsGenesis := shieldInstruction.Build()
 	if shieldInsGenesis == nil {
 		panic("Build inst got error")
@@ -92,7 +93,7 @@ func main() {
 	newKey := solana.NewWallet()
 
 	fmt.Println("============ TEST CREATE NEW ASSOCIATE TOKEN ACCOUNT =============")
-	mintPubkey := solana.MustPublicKeyFromBase58("EHheP6Wfyz65ve258TYQcfBHAAY4LsErnmXZozrgfvGr");
+	mintPubkey := solana.MustPublicKeyFromBase58("EHheP6Wfyz65ve258TYQcfBHAAY4LsErnmXZozrgfvGr")
 
 	tx2, err := solana.NewTransaction(
 		[]solana.Instruction{
@@ -115,7 +116,46 @@ func main() {
 	spew.Dump(sig)
 
 	fmt.Println("============ TEST UNSHIELD =============")
+	txBurn := "04932a9003db2990728ee2f8450463aa6c39ba4b2773573dc86938760eec7eba"
+	vaultAcc := solana.MustPublicKeyFromBase58("FmARrhNZxzA6aPXGuxeM71DMTzwMUYxqvpC8kh1pLR8Y")
+	signers3 := []solana.PrivateKey{
+		feePayer,
+	}
+	vaultTokenAuthority, _, err := solana.FindAssociatedTokenAddress(
+		incognitoProxy,
+		mintPubkey,
+	)
+	if err != nil {
+		panic(err)
+	}
+	unshieldAccounts := []*solana.AccountMeta{
+		solana.NewAccountMeta(vaultTokenAcc, true, false),
+		solana.NewAccountMeta(shieldMakerTokenAccount, true, false),
+		solana.NewAccountMeta(vaultTokenAuthority, false, false),
+		solana.NewAccountMeta(vaultAcc, false, false),
+		solana.NewAccountMeta(incognitoProxy, false, false),
+		solana.NewAccountMeta(solana.TokenProgramID, false, false),
+	}
 
+	unshield := unshield2.NewUnshield(
+		txBurn,
+		"getburnpbscprooffordeposittosc",
+		"https://mainnet.incognito.org/fullnode",
+		program,
+		unshieldAccounts,
+	)
+	tx3, err := solana.NewTransaction(
+		[]solana.Instruction{
+			unshield.Build(),
+		},
+		recent.Value.Blockhash,
+		solana.TransactionPayer(feePayer.PublicKey()),
+	)
+	sig, err = SignAndSendTx(tx3, signers3, rpcClient)
+	if err != nil {
+		panic(err)
+	}
+	spew.Dump(sig)
 
 	fmt.Println("============ TEST LISTEN SHIELD EVENT =============")
 	// listen shield to vault logs
