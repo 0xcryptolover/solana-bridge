@@ -47,7 +47,10 @@ pub enum BridgeError {
     InvalidBoolValue,
     /// Beacon uninit
     #[error("Invalid incognito proxy account beacon uninit")]
-    BeaconsUnInitialized
+    BeaconsUnInitialized,
+    /// Block inst merkle tree
+    #[error("Invalid lock inst merkle tree")]
+    InvalidBeaconMerkleTree
 }
 
 impl From<BridgeError> for ProgramError {

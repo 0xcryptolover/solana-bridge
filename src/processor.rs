@@ -231,11 +231,20 @@ fn process_unshield(
         }
     }
 
-    // todo: verify merkle tree
     // append block height to instruction
-    // let height_bytes = unshield_info.height.to_le_bytes();
-    // let mut inst_vec = inst.to_vec();
-    // inst_vec.extend_from_slice(&height_bytes);
+    let height_bytes = unshield_info.height.to_le_bytes();
+    let mut inst_vec = inst.to_vec();
+    inst_vec.extend_from_slice(&height_bytes);
+    let inst_hash = hash(&inst_vec[..]);
+    if !instruction_in_merkle_tree(
+        &inst_hash.to_bytes(),
+        &unshield_info.inst_root,
+        &unshield_info.inst_paths,
+        &unshield_info.inst_path_is_lefts
+    ) {
+        return Err(BridgeError::InvalidBeaconMerkleTree.into());
+    }
+
     // todo: store txid
 
     // prepare to transfer token to user
@@ -382,5 +391,34 @@ fn assert_uninitialized<T: Pack + IsInitialized>(
     } else {
         Ok(account)
     }
+}
+
+fn instruction_in_merkle_tree(
+    leaf: &[u8; 32],
+    root: &[u8; 32],
+    paths: &Vec<[u8; 32]>,
+    path_lefts: &Vec<bool>
+) -> bool {
+    if paths.len() != path_lefts.len() {
+        msg!("paths and path_lefts is not match");
+        return false;
+    }
+    let mut build_root = leaf.clone();
+    for i in 0..paths.len() {
+        if path_lefts[i] {
+            let mut temp = paths[i][..].to_vec();
+            temp.extend_from_slice(&build_root[..]);
+            build_root = hash(&temp[..]).to_bytes();
+        } else if paths[i] == [0; 32] {
+            let mut temp = build_root[..].to_vec();
+            temp.extend_from_slice(&build_root[..]);
+            build_root = hash(&temp[..]).to_bytes();
+        } else {
+            let mut temp = build_root[..].to_vec();
+            temp.extend_from_slice(&paths[i][..]);
+            build_root = hash(&temp[..]).to_bytes();
+        }
+    }
+    build_root == *root
 }
 
