@@ -9,12 +9,15 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
     instruction::Instruction,
     secp256k1_recover::secp256k1_recover,
-    keccak::hash
+    keccak::hash,
+    system_instruction,
 };
 use std::str;
+use std::{collections::BTreeMap};
+use borsh::{BorshSerialize};
 use spl_token::state::Account as TokenAccount;
 use arrayref::{array_refs, array_ref};
-use crate::{error::BridgeError, instruction::BridgeInstruction, state::{UnshieldRequest, IncognitoProxy}};
+use crate::{error::BridgeError, instruction::BridgeInstruction, state::{UnshieldRequest, IncognitoProxy, Vault}};
 
 const LEN: usize = 1 + 1 + 32 + 32 + 32 + 32; // ignore last 32 bytes in instruction
 const ASC: [u8; 32] = [0x8c,0x97,0x25,0x8f,0x4e,0x24,0x89,0xf1,0xbb,0x3d,0x10,0x29,0x14,0x8e,0x0d,0x83,0x0b,0x5a,0x13,0x99,0xda,0xff,0x10,0x84,0x04,0x8e,0x7b,0xd8,0xdb,0xe9,0xf8,0x59];
@@ -36,8 +39,13 @@ pub fn process_instruction(
             process_unshield(accounts, unshield_info, program_id)
         }
         BridgeInstruction::InitBeacon { init_beacon_info } => {
-            msg!("Instruction: init beacon list");
+            msg!("Instruction: init beacon list and vault state");
             process_init_beacon(accounts, init_beacon_info, program_id)
+        }
+
+        BridgeInstruction::InitVault { } => {
+            msg!("Instruction: init beacon list and vault state");
+            process_init_vault(accounts, program_id)
         }
     }
 }
@@ -162,7 +170,7 @@ fn process_unshield(
         receiver_key,
         _,
         unshield_amount,
-        tx_id, // todo: store this data
+        tx_id,
     ) = array_refs![
         inst_,
         1,
@@ -237,6 +245,7 @@ fn process_unshield(
     // let mut inst_vec = inst.to_vec();
     // inst_vec.extend_from_slice(&height_bytes);
     // todo: store txid
+    process_insert_map_vault(vault_account, program_id, tx_id)?;
 
     // prepare to transfer token to user
     let authority_signer_seeds = &[
@@ -306,6 +315,91 @@ fn process_init_beacon(
     incognito_proxy_info.vault = init_beacon_info.vault;
     incognito_proxy_info.beacons = init_beacon_info.beacons;
     IncognitoProxy::pack(incognito_proxy_info, &mut incognito_proxy.data.borrow_mut())?;
+
+    Ok(())
+}
+
+// process init vault state - to store unshielding txIDs
+fn process_init_vault(accounts: &[AccountInfo], program_id: &Pubkey) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+
+    let initalizer = next_account_info(account_info_iter)?;
+    let vault_account = next_account_info(account_info_iter)?;
+    let system_program = next_account_info(account_info_iter)?;
+
+    if !initalizer.is_signer {
+        return Err(ProgramError::MissingRequiredSignature)
+    }
+
+    let (map_pda, map_bump) = Pubkey::find_program_address(
+        &[b"map".as_ref()],
+        program_id
+    );
+
+    if map_pda != *vault_account.key || !vault_account.is_writable || !vault_account.data_is_empty() {
+        return Err(BridgeError::InvalidMapAccount.into())
+    }
+
+    let rent = Rent::get()?;
+    let rent_lamports = rent.minimum_balance(Vault::LEN);
+
+    let create_map_ix = &system_instruction::create_account(
+        initalizer.key, 
+        vault_account.key, 
+        rent_lamports, 
+        Vault::LEN.try_into().unwrap(), 
+        program_id
+    );
+
+    msg!("Creating MapAccount account");
+    invoke_signed(
+        create_map_ix, 
+        &[
+            initalizer.clone(),
+            vault_account.clone(),
+            system_program.clone()
+        ],
+        &[&[
+            b"map".as_ref(),
+            &[map_bump]
+        ]]
+    )?;
+
+    msg!("Deserializing MapAccount account");
+    // let mut vault_state = try_from_slice_unchecked::<Vault>(&vault_account.data.borrow()).unwrap();
+    let mut vault_state = Vault::deserialize(&vault_account.data.borrow());
+    if vault_state.is_initialized() {
+        msg!("Vault initialized");
+        return Err(BridgeError::VaultInitialized.into());
+    }
+
+    vault_state.is_initialized = true;
+    let empty_map: BTreeMap<[u8; 32], bool> = BTreeMap::new();
+    vault_state.map = empty_map;
+
+    msg!("Serializing MapAccount account");
+    vault_state.serialize(&mut &mut vault_account.data.borrow_mut()[..])?;
+
+    Ok(())
+}
+
+// process init vault state - to store unshielding txIDs
+fn process_insert_map_vault(vault_account: &AccountInfo, program_id: &Pubkey, key: &[u8; 32]) -> ProgramResult {
+    if vault_account.data.borrow()[0] == 0 || *vault_account.owner != *program_id {
+        return Err(BridgeError::InvalidMapAccount.into())
+    }
+
+    msg!("Deserializing MapAccount account");
+    let mut vault_state = Vault::deserialize(&vault_account.data.borrow());
+
+    if vault_state.map.contains_key(key) {
+        return Err(BridgeError::TxIDExisted.into())
+    }
+
+    vault_state.map.insert(*key, true);
+    
+    msg!("Serializing MapAccount account");
+    vault_state.serialize(&mut &mut vault_account.data.borrow_mut()[..])?;
 
     Ok(())
 }

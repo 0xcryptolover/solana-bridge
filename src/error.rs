@@ -47,7 +47,16 @@ pub enum BridgeError {
     InvalidBoolValue,
     /// Beacon uninit
     #[error("Invalid incognito proxy account beacon uninit")]
-    BeaconsUnInitialized
+    BeaconsUnInitialized,
+    /// Invalid map account of vault
+    #[error("Invalid map account of vault")]
+    InvalidMapAccount,
+    /// The vault already initalized
+    #[error("The vault already initialized")]
+    VaultInitialized,
+    /// TxID was existed
+    #[error("TxID was existed")]
+    TxIDExisted,
 }
 
 impl From<BridgeError> for ProgramError {

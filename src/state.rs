@@ -3,6 +3,7 @@ use solana_program::{
     program_pack::{IsInitialized, Pack, Sealed},
     pubkey::{Pubkey, PUBKEY_BYTES},
     secp256k1_recover::{Secp256k1Pubkey, SECP256K1_PUBLIC_KEY_LENGTH},
+    borsh::try_from_slice_unchecked,
 };
 use std::{collections::BTreeMap};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
@@ -12,12 +13,24 @@ use crate::error::BridgeError;
 /// ====== INCOGNITO VAULT =======
 #[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct Vault {
-    pub is_initialized: u8,
+    pub is_initialized: bool,
     pub map: BTreeMap<[u8; 32], bool> // 100
 }
 
 impl Vault {
-    const LEN: usize = 1 + (4 + (100 * 33)); // 100 tx id to store
+    pub const LEN: usize = 1 + (4 + (100 * 33)); // 100 tx id to store
+
+    pub fn deserialize(src: &[u8]) -> Self {
+        try_from_slice_unchecked::<Vault>(src).unwrap()
+    }
+}
+
+impl Sealed for Vault{}
+
+impl IsInitialized for Vault {
+    fn is_initialized(&self) -> bool {
+        self.is_initialized
+    }
 }
 
 /// ====== INCOGNITO PROXY =======

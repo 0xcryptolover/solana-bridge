@@ -36,6 +36,9 @@ pub enum BridgeInstruction {
         /// beacon info
         init_beacon_info: IncognitoProxy,
     },
+
+     ///// init vault state
+    InitVault {}
 }
 
 impl BridgeInstruction {
@@ -116,6 +119,9 @@ impl BridgeInstruction {
                         beacons
                     }   
                 }
+            },
+            3 => {
+                Self::InitVault{}
             }
             _ => return Err(InvalidInstruction.into()),
         })
