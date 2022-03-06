@@ -192,7 +192,8 @@ fn process_unshield(
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
 
-    if receiver_key != *unshield_token_account.key {
+    let is_wsol = token_key == spl_token::native_mint::id();
+    if !is_wsol && receiver_key != *unshield_token_account.key {
         msg!("Receive key and key provided not match {}, {}", receiver_key, *unshield_token_account.key);
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
@@ -255,25 +256,6 @@ fn process_unshield(
         &[incognito_proxy_info.bump_seed],
     ];
 
-    let vault_authority_pubkey =
-    Pubkey::create_program_address(authority_signer_seeds, program_id)?;
-
-    if &vault_authority_pubkey != vault_authority_account.key {
-        msg!(
-            "Derived vault authority {} does not match the vault authority account provided {}",
-            &vault_authority_pubkey.to_string(),
-            &vault_authority_account.key.to_string(),
-        );
-        return Err(BridgeError::InvalidTokenAuthority.into());
-    }
-
-    let vault_token_account_info = TokenAccount::unpack(&vault_token_account.try_borrow_data()?)?;
-
-    if vault_token_account_info.owner != vault_authority_pubkey {
-        msg!("Invalid vault token account owner");
-        return Err(BridgeError::InvalidAccountOwner.into());
-    }
-
     spl_token_transfer(TokenTransferParams {
         source: vault_token_account.clone(),
         destination: unshield_token_account.clone(),
@@ -282,6 +264,27 @@ fn process_unshield(
         authority_signer_seeds,
         token_program: token_program.clone(),
     })?;
+
+    // handle native token
+    if is_wsol {
+        if *vault_token_account.key == *unshield_token_account.key {
+            msg!("Invalid sender and receiver in unshield request");
+            return Err(BridgeError::InvalidTransferTokenData.into());
+        }
+        let receiver_acc = next_account_info(account_info_iter)?;
+        if *receiver_acc.key != receiver_key {
+            msg!("Mismatch receiver_key in inst and provided account");
+            return Err(BridgeError::InvalidTransferTokenData.into());
+        }
+        // close account
+        spl_close_token_acc(TokenCloseParams {
+            account: unshield_token_account.clone(),
+            destination: receiver_acc.clone(),
+            authority: vault_authority_account.clone(),
+            authority_signer_seeds,
+            token_program: token_program.clone(),
+        })?;
+    }
 
     Ok(())
 }
@@ -361,6 +364,30 @@ fn spl_token_transfer(params: TokenTransferParams<'_, '_>) -> ProgramResult {
     result.map_err(|_| BridgeError::TokenTransferFailed.into())
 }
 
+/// Issue a spl_token `Close` instruction.
+#[inline(always)]
+fn spl_close_token_acc(params: TokenCloseParams<'_, '_>) -> ProgramResult {
+    let TokenCloseParams {
+        account,
+        destination,
+        authority,
+        token_program,
+        authority_signer_seeds,
+    } = params;
+    let result = invoke_optionally_signed(
+        &spl_token::instruction::close_account(
+            token_program.key,
+            account.key,
+            destination.key,
+            authority.key,
+            &[],
+        )?,
+        &[account, destination, authority, token_program],
+        authority_signer_seeds,
+    );
+    result.map_err(|_| BridgeError::CloseTokenAccountFailed.into())
+}
+
 /// Invoke signed unless signers seeds are empty
 #[inline(always)]
 fn invoke_optionally_signed(
@@ -379,6 +406,14 @@ struct TokenTransferParams<'a: 'b, 'b> {
     source: AccountInfo<'a>,
     destination: AccountInfo<'a>,
     amount: u64,
+    authority: AccountInfo<'a>,
+    authority_signer_seeds: &'b [&'b [u8]],
+    token_program: AccountInfo<'a>,
+}
+
+struct TokenCloseParams<'a: 'b, 'b> {
+    account: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
     authority: AccountInfo<'a>,
     authority_signer_seeds: &'b [&'b [u8]],
     token_program: AccountInfo<'a>,

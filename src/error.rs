@@ -50,7 +50,13 @@ pub enum BridgeError {
     BeaconsUnInitialized,
     /// Block inst merkle tree
     #[error("Invalid lock inst merkle tree")]
-    InvalidBeaconMerkleTree
+    InvalidBeaconMerkleTree,
+    /// Invalid sender, receiver
+    #[error("Invalid sender, receiver")]
+    InvalidTransferTokenData,
+    /// Close token account failed.
+    #[error("Close token account failed")]
+    CloseTokenAccountFailed,
 }
 
 impl From<BridgeError> for ProgramError {
