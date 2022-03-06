@@ -115,7 +115,8 @@ fn process_shield(
 /// [x] declare vars
 /// [x] extract info from input params
 /// [x] verify beacon signatures
-/// [ ] verify instruction merkle tree
+/// [x] verify instruction merkle tree
+/// [ ] detect unshield sol and transfer sol directly to user account
 /// [ ] store unshield tx id
 /// [x] transfer token back to user
 
