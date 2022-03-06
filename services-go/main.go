@@ -19,6 +19,8 @@ const UNSHIELD = "Unshield"
 const INCOGNITO_PROXY = "5Tq3wvYAD6hRonCiUx62k37gELxxEABSYCkaqrSP3ztv"
 const PROGRAM_ID = "BKGhwbiTHdUxcuWzZtDWyioRBieDEXTtgEk8u1zskZnk"
 const SYNC_NATIVE_TAG = 0x11
+const NEW_TOKEN_ACC = 0x1
+const ACCCOUN_SIZE = 165
 
 func main() {
 	// init vars
@@ -162,7 +164,7 @@ func main() {
 	fmt.Println("==============================================================================")
 	fmt.Println("============ TEST FULL FLOW SHIELD AND UNSHIELD FOR NATIVE TOKEN =============")
 	fmt.Println("==============================================================================")
-	solAmount := uint64(1e5)
+	solAmount := uint64(1e7)
 	recent, err = rpcClient.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
 	if err != nil {
 		panic(err)
@@ -254,7 +256,71 @@ func main() {
 	spew.Dump(sig4)
 
 	// unshield sol
-	//native_account_token := solana.NewWallet()
+	nativeAccountToken, err := solana.WalletFromPrivateKeyBase58("YpRLgTL3DPc83MTjdsVE6ALv5RqUQt3jZ35aVQDxeAmJLqsDhXZFtPnFXganq6DfQ7Q91guGQjKc13YMVjyX8vP")
+	if err != nil {
+		panic(err)
+	}
+
+	unshieldAccounts5 := []*solana.AccountMeta{
+		solana.NewAccountMeta(vaultNativeTokenAcc, true, false),
+		solana.NewAccountMeta(nativeAccountToken.PublicKey(), true, false),
+		solana.NewAccountMeta(vaultTokenAuthority, false, false),
+		solana.NewAccountMeta(vaultAcc, false, false),
+		solana.NewAccountMeta(incognitoProxy, false, false),
+		solana.NewAccountMeta(solana.TokenProgramID, false, false),
+		solana.NewAccountMeta(shieldMaker.PublicKey(), true, false),
+	}
+
+	signers5 := []solana.PrivateKey{
+		feePayer,
+		shieldMaker,
+		nativeAccountToken.PrivateKey,
+	}
+
+	unshield5 := unshield2.NewUnshield(
+		txBurn,
+		"getburnpbscprooffordeposittosc",
+		"https://mainnet.incognito.org/fullnode",
+		program,
+		unshieldAccounts5,
+	)
+	exemptLamport, err := rpcClient.GetMinimumBalanceForRentExemption(context.Background(), ACCCOUN_SIZE, rpc.CommitmentConfirmed)
+	if err != nil {
+		panic(err)
+	}
+
+	// build create new token acc
+	newAccToken := solana.NewInstruction(
+		solana.TokenProgramID,
+		[]*solana.AccountMeta{
+			solana.NewAccountMeta(nativeAccountToken.PublicKey(), true, false),
+			solana.NewAccountMeta(solana.SolMint, false, false),
+			solana.NewAccountMeta(vaultTokenAuthority, false, false),
+			solana.NewAccountMeta(solana.SysVarRentPubkey, false, false),
+		},
+		[]byte{NEW_TOKEN_ACC},
+	)
+
+	tx5, err := solana.NewTransaction(
+		[]solana.Instruction{
+			system.NewCreateAccountInstruction(
+				exemptLamport,
+				ACCCOUN_SIZE,
+				solana.TokenProgramID,
+				feePayer.PublicKey(),
+				nativeAccountToken.PublicKey(),
+			).Build(),
+			newAccToken,
+			unshield5.Build(),
+		},
+		recent.Value.Blockhash,
+		solana.TransactionPayer(feePayer.PublicKey()),
+	)
+	sig, err = SignAndSendTx(tx5, signers5, rpcClient)
+	if err != nil {
+		panic(err)
+	}
+	spew.Dump(sig)
 
 	fmt.Println("============ TEST LISTEN TRANSFER TOKEN EVENT =============")
 	//wsClient.ProgramSubscribeWithOpts(
