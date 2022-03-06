@@ -121,22 +121,23 @@ const shieldMaker = Keypair.fromSecretKey(
     //     );
     // const incognitoProxy = Keypair.generate();
     const incognitoProxy = Keypair.fromSecretKey(
-        Uint8Array.from(Uint8Array.from([192,128,52,1,39,254,140,96,156,27,123,85,24,141,56,21,56,50,96,207,26,160,76,155,163,240,113,67,225,118,183,90,111,142,156,39,51,171,205,114,122,60,45,201,171,77,140,80,122,148,204,4,211,231,223,134,242,162,60,29,231,113,110,56]))
+        Uint8Array.from(Uint8Array.from([129,152,8,90,11,237,119,136,226,30,152,40,165,175,69,0,215,156,76,140,181,201,194,117,238,115,190,156,30,250,76,17,66,78,46,18,44,247,254,251,157,123,249,174,144,116,79,76,244,181,24,166,12,76,139,249,66,153,116,123,91,89,6,87]))
     );
     console.log(`incognito proxy: ${incognitoProxy.publicKey.toBase58()}`);
+    console.log("incognito proxy private key: ", incognitoProxy.secretKey.toString());
 
     // const vaultAccount = Keypair.generate();
     const vaultAccount = new PublicKey("FmARrhNZxzA6aPXGuxeM71DMTzwMUYxqvpC8kh1pLR8Y");
     console.log("vault account ", vaultAccount.toBase58());
-    // const beaconLength = 1315;
-    // const lamportsExempt = await connection.getMinimumBalanceForRentExemption(beaconLength, 'confirmed');
+    // const beaconLengthInit = 1315;
+    // const lamportsExempt = await connection.getMinimumBalanceForRentExemption(beaconLengthInit, 'confirmed');
     //
     // const transaction = new Transaction().add(
     //     SystemProgram.createAccount({
     //         fromPubkey: shieldMaker.publicKey,
     //         newAccountPubkey: incognitoProxy.publicKey,
     //         lamports: lamportsExempt,
-    //         space: beaconLength,
+    //         space: beaconLengthInit,
     //         programId,
     //     }),
     // );
@@ -152,11 +153,12 @@ const shieldMaker = Keypair.fromSecretKey(
     );
     console.log("bump seed ", bumpInit);
     console.log("vault token authority ", vaultTokenAuthority.toBase58());
-    // let vaultTokenAcc = await getAssociatedTokenAddress(
-    //     mintPubkey, // mint
-    //     vaultTokenAuthority, // owner
-    //   true, // allowOwnerOffCurve
-    // );
+    let vaultTokenAcc = await getAssociatedTokenAddress(
+        mintPubkey, // mint
+        vaultTokenAuthority, // owner
+      true, // allowOwnerOffCurve
+    );
+    console.log(" vault token account :", vaultTokenAcc.toBase58());
     // console.log(`token account owned by vault : ${vaultTokenAcc.toBase58()}`);
     //
     // let tx = new Transaction().add(
@@ -168,7 +170,7 @@ const shieldMaker = Keypair.fromSecretKey(
     //     )
     // );
     // console.log(`txhash: ${await connection.sendTransaction(tx, [feePayer])}`);
-    let vaultTokenAcc = new PublicKey("6dvNfGjtaErEefhUkDJtPhsxKxCxVDCMuVvyEdWsEgQu");
+    // let vaultTokenAcc = new PublicKey("6dvNfGjtaErEefhUkDJtPhsxKxCxVDCMuVvyEdWsEgQu");
 
     console.log("=============== Init Beacon =================");
 
@@ -207,12 +209,12 @@ const shieldMaker = Keypair.fromSecretKey(
     console.log("Beacon instruction length: ", init_beacon_instruction.data.length);
     // todo: query beacon state before init
     // create transaction init beacon list
-    // const trans_init_beacon = await setPayerAndBlockhashTransaction(
-    //     [init_beacon_instruction]
-    // );
-    // const signature_init_beacon = await signAndSendTransaction(trans_init_beacon, [feePayer]);
-    // const result_init_beacon = await connection.confirmTransaction(signature_init_beacon);
-    // console.log(`init beacon txhash: ${result_init_beacon}`);
+    const trans_init_beacon = await setPayerAndBlockhashTransaction(
+        [init_beacon_instruction]
+    );
+    const signature_init_beacon = await signAndSendTransaction(trans_init_beacon, [feePayer]);
+    const result_init_beacon = await connection.confirmTransaction(signature_init_beacon);
+    console.log(`init beacon txhash: ${result_init_beacon}`);
 
     console.log("=============== Make shield request =================");
 

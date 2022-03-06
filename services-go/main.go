@@ -6,6 +6,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gagliardetto/solana-go"
 	associatedtokenaccount "github.com/gagliardetto/solana-go/programs/associated-token-account"
+	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/thachtb/solana-bridge/services-go/Shield"
@@ -15,8 +16,9 @@ import (
 
 const SHIELD = "Shield"
 const UNSHIELD = "Unshield"
-const INCOGNITO_PROXY = "8WUP1RGTDTZGYBjkHQfjnwMbnnk25hnE6Du7vFpaq1QK"
+const INCOGNITO_PROXY = "5Tq3wvYAD6hRonCiUx62k37gELxxEABSYCkaqrSP3ztv"
 const PROGRAM_ID = "BKGhwbiTHdUxcuWzZtDWyioRBieDEXTtgEk8u1zskZnk"
+const SYNC_NATIVE_TAG = 0x11
 
 func main() {
 	// init vars
@@ -45,10 +47,10 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("============ TEST SHIELD =============")
+	fmt.Println("============ TEST SHIELD TOKEN ACCOUNT =============")
 
 	shieldMakerTokenAccount := solana.MustPublicKeyFromBase58("5397KrEBCuEhdTjWF5B9xjVzGJR6MyxXLP3srbrWo2gD")
-	vaultTokenAcc := solana.MustPublicKeyFromBase58("6dvNfGjtaErEefhUkDJtPhsxKxCxVDCMuVvyEdWsEgQu")
+	vaultTokenAcc := solana.MustPublicKeyFromBase58("GKCSgiLWos1zEvNWKAEprngjdaazLUXMdM354Ag7CpX")
 
 	incAddress := "12shR6fDe7ZcprYn6rjLwiLcL7oJRiek66ozzYu3B3rBxYXkqJeZYj6ZWeYy4qR4UHgaztdGYQ9TgHEueRXN7VExNRGB5t4auo3jTgXVBiLJmnTL5LzqmTXezhwmQvyrRjCbED5xW7yMMeeWarKa"
 	shieldAmount := uint64(100000)
@@ -74,7 +76,6 @@ func main() {
 	if shieldInsGenesis == nil {
 		panic("Build inst got error")
 	}
-	//amount := uint64(1000)
 	tx, err := solana.NewTransaction(
 		[]solana.Instruction{
 			shieldInsGenesis,
@@ -90,10 +91,10 @@ func main() {
 		panic(err)
 	}
 	spew.Dump(sig)
-	newKey := solana.NewWallet()
 
 	fmt.Println("============ TEST CREATE NEW ASSOCIATE TOKEN ACCOUNT =============")
 	mintPubkey := solana.MustPublicKeyFromBase58("EHheP6Wfyz65ve258TYQcfBHAAY4LsErnmXZozrgfvGr")
+	newKey := solana.NewWallet()
 
 	tx2, err := solana.NewTransaction(
 		[]solana.Instruction{
@@ -115,15 +116,15 @@ func main() {
 	}
 	spew.Dump(sig)
 
-	fmt.Println("============ TEST UNSHIELD =============")
+	fmt.Println("============ TEST UNSHIELD TOKEN ACCOUNT =============")
 	txBurn := "04932a9003db2990728ee2f8450463aa6c39ba4b2773573dc86938760eec7eba"
 	vaultAcc := solana.MustPublicKeyFromBase58("FmARrhNZxzA6aPXGuxeM71DMTzwMUYxqvpC8kh1pLR8Y")
 	signers3 := []solana.PrivateKey{
 		feePayer,
 	}
-	vaultTokenAuthority, _, err := solana.FindAssociatedTokenAddress(
-		incognitoProxy,
-		mintPubkey,
+	vaultTokenAuthority, _, err := solana.FindProgramAddress(
+		[][]byte{incognitoProxy.Bytes()},
+		program,
 	)
 	if err != nil {
 		panic(err)
@@ -153,9 +154,123 @@ func main() {
 	)
 	sig, err = SignAndSendTx(tx3, signers3, rpcClient)
 	if err != nil {
-		panic(err)
+		//panic(err)
 	}
 	spew.Dump(sig)
+
+	fmt.Println("==============================================================================")
+	fmt.Println("==============================================================================")
+	fmt.Println("============ TEST FULL FLOW SHIELD AND UNSHIELD FOR NATIVE TOKEN =============")
+	fmt.Println("==============================================================================")
+	solAmount := uint64(1e5)
+	recent, err = rpcClient.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
+	if err != nil {
+		panic(err)
+	}
+	shieldNativeTokenAcc, _, err := solana.FindAssociatedTokenAddress(
+		shieldMaker.PublicKey(),
+		solana.SolMint,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(shieldNativeTokenAcc.String())
+
+	// create new token account Token11..112 to shield
+	shieldNativeTokenAccInst := associatedtokenaccount.NewCreateInstruction(
+		feePayer.PublicKey(),
+		shieldMaker.PublicKey(),
+		solana.SolMint,
+	).Build()
+
+	vaultNativeTokenAcc, _, err := solana.FindAssociatedTokenAddress(
+		vaultTokenAuthority,
+		solana.SolMint,
+	)
+
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(vaultNativeTokenAcc.String())
+
+	vaultNativeTokenAccInst := associatedtokenaccount.NewCreateInstruction(
+		feePayer.PublicKey(),
+		vaultTokenAuthority,
+		solana.SolMint,
+	).Build()
+
+	incAddress4 := "12shR6fDe7ZcprYn6rjLwiLcL7oJRiek66ozzYu3B3rBxYXkqJeZYj6ZWeYy4qR4UHgaztdGYQ9TgHEueRXN7VExNRGB5t4auo3jTgXVBiLJmnTL5LzqmTXezhwmQvyrRjCbED5xW7yMMeeWarKa"
+	shieldAccounts4 := []*solana.AccountMeta{
+		solana.NewAccountMeta(shieldNativeTokenAcc, true, false),
+		solana.NewAccountMeta(vaultNativeTokenAcc, true, false),
+		solana.NewAccountMeta(incognitoProxy, false, false),
+		solana.NewAccountMeta(shieldMaker.PublicKey(), false, true),
+		solana.NewAccountMeta(solana.TokenProgramID, false, false),
+	}
+	signers4 := []solana.PrivateKey{
+		feePayer,
+		shieldMaker,
+	}
+
+	shieldInstruction4 := shield.NewShield(
+		incAddress4,
+		solAmount,
+		program,
+		shieldAccounts4,
+	)
+
+	// build sync native token program
+	syncNativeeInst := solana.NewInstruction(
+		solana.TokenProgramID,
+		[]*solana.AccountMeta{
+			solana.NewAccountMeta(shieldNativeTokenAcc, true, false),
+		},
+		[]byte{SYNC_NATIVE_TAG},
+	)
+
+	tx4, err := solana.NewTransaction(
+		[]solana.Instruction{
+			shieldNativeTokenAccInst,
+			vaultNativeTokenAccInst,
+			system.NewTransferInstruction(
+				solAmount,
+				shieldMaker.PublicKey(),
+				shieldNativeTokenAcc,
+			).Build(),
+			syncNativeeInst,
+			shieldInstruction4.Build(),
+		}[2:],
+		recent.Value.Blockhash,
+		solana.TransactionPayer(feePayer.PublicKey()),
+	)
+	if err != nil {
+		panic(err)
+	}
+	sig4, err := SignAndSendTx(tx4, signers4, rpcClient)
+	if err != nil {
+		panic(err)
+	}
+	spew.Dump(sig4)
+
+	// unshield sol
+	//native_account_token := solana.NewWallet()
+
+	fmt.Println("============ TEST LISTEN TRANSFER TOKEN EVENT =============")
+	//wsClient.ProgramSubscribeWithOpts(
+	//	solana.SystemProgramID,
+	//	rpc.CommitmentFinalized,
+	//	solana.EncodingJSONParsed,
+	//	[]rpc.RPCFilter{},
+	//)
+
+	fmt.Println("============ TEST LISTEN TRANSFER SOL EVENT =============")
+	//wsClient.ProgramSubscribeWithOpts(
+	//	solana.TokenProgramID,
+	//	rpc.CommitmentFinalized,
+	//	solana.EncodingJSONParsed,
+	//	[]rpc.RPCFilter{},
+	//)
 
 	fmt.Println("============ TEST LISTEN SHIELD EVENT =============")
 	// listen shield to vault logs
