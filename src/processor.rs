@@ -9,12 +9,17 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
     instruction::Instruction,
     secp256k1_recover::secp256k1_recover,
-    keccak::hash
+    keccak::hash,
+    borsh::try_from_slice_unchecked,
 };
-use std::str;
+use std::{
+    collections::BTreeMap,
+    str,
+};
+use borsh::{BorshSerialize, BorshDeserialize};
 use spl_token::state::Account as TokenAccount;
 use arrayref::{array_refs, array_ref};
-use crate::{error::BridgeError, instruction::BridgeInstruction, state::{UnshieldRequest, IncognitoProxy}};
+use crate::{error::BridgeError, instruction::BridgeInstruction, state::{UnshieldRequest, IncognitoProxy, Vault}};
 
 const LEN: usize = 1 + 1 + 32 + 32 + 32 + 32; // ignore last 32 bytes in instruction
 const ASC: [u8; 32] = [0x8c,0x97,0x25,0x8f,0x4e,0x24,0x89,0xf1,0xbb,0x3d,0x10,0x29,0x14,0x8e,0x0d,0x83,0x0b,0x5a,0x13,0x99,0xda,0xff,0x10,0x84,0x04,0x8e,0x7b,0xd8,0xdb,0xe9,0xf8,0x59];
@@ -116,7 +121,7 @@ fn process_shield(
 /// [x] extract info from input params
 /// [x] verify beacon signatures
 /// [x] verify instruction merkle tree
-/// [ ] detect unshield sol and transfer sol directly to user account
+/// [x] detect unshield sol and transfer sol directly to user account
 /// [ ] store unshield tx id
 /// [x] transfer token back to user
 
@@ -248,7 +253,7 @@ fn process_unshield(
         return Err(BridgeError::InvalidBeaconMerkleTree.into());
     }
 
-    // todo: store txid
+    _process_insert_entry(vault_account, program_id, tx_id)?;
 
     // prepare to transfer token to user
     let authority_signer_seeds = &[
@@ -298,7 +303,9 @@ fn process_init_beacon(
     let account_info_iter = &mut accounts.iter();
     let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
+    let vault_acc = next_account_info(account_info_iter)?;
     assert_rent_exempt(rent, incognito_proxy)?;
+    assert_rent_exempt(rent, vault_acc)?;
     let mut incognito_proxy_info = assert_uninitialized::<IncognitoProxy>(incognito_proxy)?;
     if incognito_proxy.owner != program_id {
         msg!("Invalid incognito proxy");
@@ -310,6 +317,44 @@ fn process_init_beacon(
     incognito_proxy_info.vault = init_beacon_info.vault;
     incognito_proxy_info.beacons = init_beacon_info.beacons;
     IncognitoProxy::pack(incognito_proxy_info, &mut incognito_proxy.data.borrow_mut())?;
+    _process_init_map(vault_acc)?;
+
+    Ok(())
+}
+
+fn _process_init_map(vault: &AccountInfo) -> ProgramResult {
+    if !vault.is_writable || !vault.data_is_empty() {
+        return Err(BridgeError::InvalidMapAccount.into())
+    }
+
+    let mut map_state = try_from_slice_unchecked::<Vault>(&vault.data.borrow()).unwrap();
+    if map_state.is_initialized != 0 {
+        msg!("map initialized");
+        return Err(BridgeError::AccInitialized.into())
+    }
+
+    let empty_map: BTreeMap<[u8; 32], bool> = BTreeMap::new();
+
+    map_state.is_initialized = 1;
+    map_state.map = empty_map;
+
+    map_state.serialize(&mut &mut vault.data.borrow_mut()[..])?;
+
+    Ok(())
+}
+
+fn _process_insert_entry(vault: &AccountInfo, program_id: &Pubkey, txid: &[u8; 32]) -> ProgramResult {
+    if vault.data.borrow()[0] == 0 || *vault.owner != *program_id {
+        return Err(BridgeError::InvalidMapAccount.into())
+    }
+    let mut map_state = try_from_slice_unchecked::<Vault>(&vault.data.borrow())?;
+
+    if map_state.map.contains_key(txid) {
+        return Err(BridgeError::InvalidUnshieldRequestUsed.into())
+    }
+
+    map_state.map.insert(*txid, true);
+    map_state.serialize(&mut &mut vault.data.borrow_mut()[..])?;
 
     Ok(())
 }
@@ -414,7 +459,7 @@ fn assert_uninitialized<T: Pack + IsInitialized>(
 ) -> Result<T, ProgramError> {
     let account: T = T::unpack_unchecked(&account_info.data.borrow())?;
     if account.is_initialized() {
-        Err(BridgeError::BeaconsInitialized.into())
+        Err(BridgeError::AccInitialized.into())
     } else {
         Ok(account)
     }

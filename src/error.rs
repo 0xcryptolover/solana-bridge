@@ -19,8 +19,8 @@ pub enum BridgeError {
     #[error("Input account owner is not the program address")]
     InvalidAccountOwner,
     /// The list of beacon already initalized
-    #[error("Beacons already initialized")]
-    BeaconsInitialized, // 5
+    #[error("Account already initialized")]
+    AccInitialized, // 5
     /// Invalid instruction data passed in.
     #[error("Failed to unpack instruction data")]
     InstructionUnpackError,
@@ -57,6 +57,12 @@ pub enum BridgeError {
     /// Close token account failed.
     #[error("Close token account failed")]
     CloseTokenAccountFailed,
+    /// Invalid map account.
+    #[error("Invalid map account")]
+    InvalidMapAccount,
+    /// Unshield request used.
+    #[error("Unshield request used")]
+    InvalidUnshieldRequestUsed
 }
 
 impl From<BridgeError> for ProgramError {
