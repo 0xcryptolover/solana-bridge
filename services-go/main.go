@@ -205,6 +205,18 @@ func main() {
 		panic(err)
 	}
 
+	// check account exist
+	_, err = rpcClient.GetAccountInfo(context.TODO(), solana.MustPublicKeyFromBase58("D1ts5r3KWzeK16cm5Qqx9Rq8cbGmc9MmvgJzY3ZdV7Si"))
+	if err != nil {
+		if err.Error() == "not found" {
+			// init account
+			fmt.Println("do init account")
+		} else {
+			panic(err)
+		}
+	}
+
+
 	fmt.Println(shieldNativeTokenAcc.String())
 
 	// create new token account Token11..112 to shield
