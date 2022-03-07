@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
+	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	associatedtokenaccount "github.com/gagliardetto/solana-go/programs/associated-token-account"
 	"github.com/gagliardetto/solana-go/programs/system"
@@ -159,6 +160,33 @@ func main() {
 		//panic(err)
 	}
 	spew.Dump(sig)
+
+	fmt.Println("==============================================================================")
+	fmt.Println("==============================================================================")
+	fmt.Println("====================== GET TX INFO IN TRANSFER TX ============================")
+	fmt.Println("==============================================================================")
+
+	// catch
+	txhash, err := solana.SignatureFromBase58("2yZtM9jcYG1jZzRLWqgLAnG6tqA7n5fQm8f5Ki1xmwHxaX5vnPK1tbeyarmpw2TYxRUYuJ8C5v1fo8ey5H4Byb9t")
+	if err != nil {
+		panic(err)
+	}
+	opts := rpc.GetTransactionOpts{
+		Commitment: rpc.CommitmentConfirmed,
+		Encoding:   solana.EncodingBase58,
+	}
+	txInfo, err := rpcClient.GetTransaction(context.Background(), txhash, &opts)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("account pre balances info %+v\n", txInfo.Meta.PostBalances)
+	fmt.Printf("account balances info %+v\n", txInfo.Meta.PostBalances)
+	fmt.Printf("token account balances info %+v\n", txInfo.Meta.PostTokenBalances)
+	txDecode, err := solana.TransactionFromDecoder(bin.NewBinDecoder(txInfo.Transaction.GetBinary()))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("key list %+v \n", txDecode.Message.AccountKeys)
 
 	fmt.Println("==============================================================================")
 	fmt.Println("==============================================================================")

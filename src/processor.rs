@@ -296,12 +296,7 @@ fn process_init_beacon(
     program_id: &Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    let initalizer = next_account_info(account_info_iter)?;
     let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
-
-    if !initalizer.is_signer {
-        return Err(ProgramError::MissingRequiredSignature);
-    }
     let incognito_proxy = next_account_info(account_info_iter)?;
     assert_rent_exempt(rent, incognito_proxy)?;
     let mut incognito_proxy_info = assert_uninitialized::<IncognitoProxy>(incognito_proxy)?;
@@ -310,11 +305,6 @@ fn process_init_beacon(
         return Err(ProgramError::IncorrectProgramId);
     }
 
-    // todo: uncomment in production
-    // if incognito_proxy_info.is_initialized {
-    //     msg!("Beacon initialized");
-    //     return Err(BridgeError::BeaconsInitialized.into());
-    // }
     incognito_proxy_info.is_initialized = init_beacon_info.is_initialized;
     incognito_proxy_info.bump_seed = init_beacon_info.bump_seed;
     incognito_proxy_info.vault = init_beacon_info.vault;
