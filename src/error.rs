@@ -50,7 +50,7 @@ pub enum BridgeError {
     BeaconsUnInitialized,
     /// Block inst merkle tree
     #[error("Invalid lock inst merkle tree")]
-    InvalidBeaconMerkleTree,
+    InvalidBeaconMerkleTree, // 15
     /// Invalid sender, receiver
     #[error("Invalid sender, receiver")]
     InvalidTransferTokenData,

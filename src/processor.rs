@@ -122,7 +122,7 @@ fn process_shield(
 /// [x] verify beacon signatures
 /// [x] verify instruction merkle tree
 /// [x] detect unshield sol and transfer sol directly to user account
-/// [ ] store unshield tx id
+/// [x] store unshield tx id
 /// [x] transfer token back to user
 
 // add logic to proccess unshield for users
@@ -323,7 +323,7 @@ fn process_init_beacon(
 }
 
 fn _process_init_map(vault: &AccountInfo) -> ProgramResult {
-    if !vault.is_writable || !vault.data_is_empty() {
+    if !vault.is_writable || vault.data.borrow().len() < 1 {
         return Err(BridgeError::InvalidMapAccount.into())
     }
 
