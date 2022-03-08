@@ -334,7 +334,6 @@ func main() {
 
 	signers5 := []solana.PrivateKey{
 		feePayer,
-		shieldMaker,
 		nativeAccountToken.PrivateKey,
 	}
 
