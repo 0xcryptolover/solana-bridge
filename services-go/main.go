@@ -142,7 +142,7 @@ func main() {
 	spew.Dump(sig)
 
 	fmt.Println("============ TEST UNSHIELD TOKEN ACCOUNT =============")
-	txBurn := "33cdf06f7dacb8ce3feccedff3cda852f0013bbf9480a69a3a473861081fd01c"
+	txBurn2 := "8c2e6eaeb04896af40e33762482eb29bffa38de3c627a91bcbb7c3c3544197c3"
 	vaultAcc := solana.MustPublicKeyFromBase58("G65gJS4feG1KXpfDXiySUGT7c6QosCJcGa4nUZsF55Du")
 	signers3 := []solana.PrivateKey{
 		feePayer,
@@ -158,13 +158,13 @@ func main() {
 		solana.NewAccountMeta(vaultTokenAcc, true, false),
 		solana.NewAccountMeta(shieldMakerTokenAccount, true, false),
 		solana.NewAccountMeta(vaultTokenAuthority, false, false),
-		solana.NewAccountMeta(vaultAcc, false, false),
+		solana.NewAccountMeta(vaultAcc, true, false),
 		solana.NewAccountMeta(incognitoProxy, false, false),
 		solana.NewAccountMeta(solana.TokenProgramID, false, false),
 	}
 
 	unshield := unshield2.NewUnshield(
-		txBurn,
+		txBurn2,
 		"getsolburnproof",
 		"http://51.89.21.38:8334",
 		program,
@@ -215,6 +215,7 @@ func main() {
 	fmt.Println("============ TEST FULL FLOW SHIELD AND UNSHIELD FOR NATIVE TOKEN =============")
 	fmt.Println("==============================================================================")
 	solAmount := uint64(1e7)
+	txBurn := "33cdf06f7dacb8ce3feccedff3cda852f0013bbf9480a69a3a473861081fd01c"
 	recent, err = rpcClient.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
 	if err != nil {
 		panic(err)
