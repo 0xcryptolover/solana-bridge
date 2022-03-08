@@ -24,7 +24,7 @@ type decodedProof struct {
 	InstRoots       [2][32]byte
 	BlkData         [2][32]byte
 	SigIdxs         [2][]*big.Int
-	Sigs 			[2][]string
+	Sigs            [2][]string
 }
 
 type getProofResult struct {
@@ -37,11 +37,11 @@ type getProofResult struct {
 }
 
 type Unshield struct {
-	burnTx string
+	burnTx         string
 	getProofMethod string
-	incFullNode string
-	programID solana.PublicKey
-	accounts []*solana.AccountMeta
+	incFullNode    string
+	programID      solana.PublicKey
+	accounts       []*solana.AccountMeta
 }
 
 func NewUnshield(burnTx string, getProofMethod string, incFullNode string, programID solana.PublicKey, accounts []*solana.AccountMeta) Unshield {
@@ -98,7 +98,7 @@ func (us *Unshield) Build() *solana.GenericInstruction {
 	for _, v := range proof.Sigs[0] {
 		sig, err := hex.DecodeString(v)
 		if err != nil {
-			fmt.Printf( "invalid beacon signature %v", err)
+			fmt.Printf("invalid beacon signature %v", err)
 			return nil
 		}
 		temp = append(temp, sig...)
@@ -112,7 +112,6 @@ func (us *Unshield) Build() *solana.GenericInstruction {
 		fmt.Printf("init account slice failed %v \n", err)
 		return nil
 	}
-
 
 	return solana.NewInstruction(
 		us.programID,
@@ -148,7 +147,7 @@ func getBurnProofV2(
 	rpcMethod string,
 ) (string, error) {
 	if len(txID) == 0 {
-		return  "", errors.New("invalid tx burn id ")
+		return "", errors.New("invalid tx burn id ")
 	}
 	payload := strings.NewReader(fmt.Sprintf("{\n    \"id\": 1,\n    \"jsonrpc\": \"1.0\",\n    \"method\": \"%s\",\n    \"params\": [\n    \t\"%s\"\n    ]\n}", rpcMethod, txID))
 
@@ -167,6 +166,7 @@ func getBurnProofV2(
 }
 
 func decodeProof(r *getProofResult) (*decodedProof, error) {
+	//r.Result.Instruction = "9d01069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f000000000015ca3ac2e71f257ccec89338437cb755857f315c2a27711c8e39302deb50c4de00000000000000000000000000000000000000000000000000000000005f5e1009973425c49305b8c47fe2fd673b73824889c7a2c79e2745b9fe2f3bb2c43ff3e0000000000000000000000000000000000000000000000000000000000000000"
 	inst := decode(r.Result.Instruction)
 	fmt.Printf("inst: %d %x\n", len(inst), inst)
 	fmt.Printf("instHash (isWithdrawed, without height): %x\n", keccak256(inst))
@@ -228,6 +228,6 @@ func decodeProof(r *getProofResult) (*decodedProof, error) {
 		InstRoots:       instRoots,
 		BlkData:         blkData,
 		SigIdxs:         sigIdxs,
-		Sigs: 			 Sigs,
+		Sigs:            Sigs,
 	}, nil
 }

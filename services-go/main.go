@@ -50,6 +50,28 @@ func main() {
 		panic(err)
 	}
 
+	fmt.Println("============ TRANSFER SOL =============")
+	testPubKey, err := solana.WalletFromPrivateKeyBase58("36iz7qASXP1TECiAWJ3xESwYeRmTAF7ti3SAHaYuFJqHkmKenRACcJ9q48df1Bpn4QQSv3J89BGjuznaGAh9zPXg")
+	tx4, err := solana.NewTransaction(
+		[]solana.Instruction{
+			system.NewTransferInstruction(
+				1000,
+				feePayer.PublicKey(),
+				testPubKey.PublicKey(),
+			).Build(),
+		},
+		recent.Value.Blockhash,
+		solana.TransactionPayer(feePayer.PublicKey()),
+	)
+	signers0 := []solana.PrivateKey{
+		feePayer,
+	}
+	sig0, err := SignAndSendTx(tx4, signers0, rpcClient)
+	if err != nil {
+		panic(err)
+	}
+	spew.Dump(sig0)
+
 	fmt.Println("============ TEST SHIELD TOKEN ACCOUNT =============")
 
 	shieldMakerTokenAccount := solana.MustPublicKeyFromBase58("5397KrEBCuEhdTjWF5B9xjVzGJR6MyxXLP3srbrWo2gD")
@@ -120,8 +142,8 @@ func main() {
 	spew.Dump(sig)
 
 	fmt.Println("============ TEST UNSHIELD TOKEN ACCOUNT =============")
-	txBurn := "04932a9003db2990728ee2f8450463aa6c39ba4b2773573dc86938760eec7eba"
-	vaultAcc := solana.MustPublicKeyFromBase58("FmARrhNZxzA6aPXGuxeM71DMTzwMUYxqvpC8kh1pLR8Y")
+	txBurn := "33cdf06f7dacb8ce3feccedff3cda852f0013bbf9480a69a3a473861081fd01c"
+	vaultAcc := solana.MustPublicKeyFromBase58("G65gJS4feG1KXpfDXiySUGT7c6QosCJcGa4nUZsF55Du")
 	signers3 := []solana.PrivateKey{
 		feePayer,
 	}
@@ -143,8 +165,8 @@ func main() {
 
 	unshield := unshield2.NewUnshield(
 		txBurn,
-		"getburnpbscprooffordeposittosc",
-		"https://mainnet.incognito.org/fullnode",
+		"getsolburnproof",
+		"http://51.89.21.38:8334",
 		program,
 		unshieldAccounts,
 	)
@@ -216,7 +238,6 @@ func main() {
 		}
 	}
 
-
 	fmt.Println(shieldNativeTokenAcc.String())
 
 	// create new token account Token11..112 to shield
@@ -271,7 +292,7 @@ func main() {
 		[]byte{SYNC_NATIVE_TAG},
 	)
 
-	tx4, err := solana.NewTransaction(
+	tx4, err = solana.NewTransaction(
 		[]solana.Instruction{
 			shieldNativeTokenAccInst,
 			vaultNativeTokenAccInst,
@@ -305,10 +326,10 @@ func main() {
 		solana.NewAccountMeta(vaultNativeTokenAcc, true, false),
 		solana.NewAccountMeta(nativeAccountToken.PublicKey(), true, false),
 		solana.NewAccountMeta(vaultTokenAuthority, false, false),
-		solana.NewAccountMeta(vaultAcc, false, false),
+		solana.NewAccountMeta(vaultAcc, true, false),
 		solana.NewAccountMeta(incognitoProxy, false, false),
 		solana.NewAccountMeta(solana.TokenProgramID, false, false),
-		solana.NewAccountMeta(shieldMaker.PublicKey(), true, false),
+		solana.NewAccountMeta(testPubKey.PublicKey(), true, false),
 	}
 
 	signers5 := []solana.PrivateKey{
@@ -319,8 +340,8 @@ func main() {
 
 	unshield5 := unshield2.NewUnshield(
 		txBurn,
-		"getburnpbscprooffordeposittosc",
-		"https://mainnet.incognito.org/fullnode",
+		"getsolburnproof",
+		"http://51.89.21.38:8334",
 		program,
 		unshieldAccounts5,
 	)
