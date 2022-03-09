@@ -19,7 +19,9 @@ use std::{
 use borsh::{BorshSerialize, BorshDeserialize};
 use spl_token::state::Account as TokenAccount;
 use arrayref::{array_refs, array_ref};
+use solana_program::instruction::AccountMeta;
 use crate::{error::BridgeError, instruction::BridgeInstruction, state::{UnshieldRequest, IncognitoProxy, Vault}};
+use crate::state::DappRequest;
 
 const LEN: usize = 1 + 1 + 32 + 32 + 32 + 32; // ignore last 32 bytes in instruction
 const ASC: [u8; 32] = [0x8c,0x97,0x25,0x8f,0x4e,0x24,0x89,0xf1,0xbb,0x3d,0x10,0x29,0x14,0x8e,0x0d,0x83,0x0b,0x5a,0x13,0x99,0xda,0xff,0x10,0x84,0x04,0x8e,0x7b,0xd8,0xdb,0xe9,0xf8,0x59];
@@ -43,6 +45,10 @@ pub fn process_instruction(
         BridgeInstruction::InitBeacon { init_beacon_info } => {
             msg!("Instruction: init beacon list");
             process_init_beacon(accounts, init_beacon_info, program_id)
+        }
+        BridgeInstruction::DappInteraction {dapp_request} => {
+            msg!("Instruction: dapp interaction");
+            process_dapp_interaction(accounts, dapp_request, program_id)
         }
     }
 }
@@ -318,6 +324,38 @@ fn process_init_beacon(
     incognito_proxy_info.beacons = init_beacon_info.beacons;
     IncognitoProxy::pack(incognito_proxy_info, &mut incognito_proxy.data.borrow_mut())?;
     _process_init_map(vault_acc)?;
+
+    Ok(())
+}
+
+fn process_dapp_interaction(
+    accounts: &[AccountInfo],
+    dapp_request: DappRequest,
+    program_id: &Pubkey,
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    let mut accounts_invoke = Vec::with_capacity(dapp_request.num_acc as usize + 1);
+    let mut accounts_info = Vec::with_capacity(dapp_request.num_acc as usize + 1);
+    for _ in 0..dapp_request.num_acc {
+        let next_acc: &AccountInfo = next_account_info(account_info_iter)?;
+        accounts_info.push(next_acc.clone());
+        if !next_acc.is_writable {
+            accounts_invoke.push(AccountMeta::new_readonly(*next_acc.key, next_acc.is_signer));
+        } else {
+            accounts_invoke.push(AccountMeta::new(*next_acc.key, next_acc.is_signer));
+        }
+    }
+    let program_dest = next_account_info(account_info_iter)?;
+
+    let new_inst = Instruction {
+        program_id: *program_dest.key,
+        accounts: accounts_invoke.clone(),
+        data: dapp_request.inst,
+    };
+    invoke(
+        &new_inst,
+        &accounts_info[..],
+    );
 
     Ok(())
 }

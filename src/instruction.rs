@@ -12,6 +12,7 @@ use crate::error::BridgeError::{
 use crate::state::{
     UnshieldRequest,
     IncognitoProxy,
+    DappRequest,
 };
 use std::{convert::TryInto, mem::size_of};
 use crate::error::BridgeError;
@@ -35,6 +36,12 @@ pub enum BridgeInstruction {
     InitBeacon {
         /// beacon info
         init_beacon_info: IncognitoProxy,
+    },
+
+    ///// dapp interaction
+    DappInteraction {
+        /// beacon info
+        dapp_request: DappRequest,
     },
 }
 
@@ -115,6 +122,17 @@ impl BridgeInstruction {
                         vault: vault_key,
                         beacons
                     }   
+                }
+            },
+            3 => {
+                let (inst_len, rest) = Self::unpack_u8(rest)?;
+                let (inst_data, rest) = Self::unpack_nbytes(rest, inst_len)?;
+                let (acc_len, _) = Self::unpack_u8(rest)?;
+                Self::DappInteraction {
+                    dapp_request: DappRequest {
+                        inst: inst_data.to_vec(),
+                        num_acc: acc_len,
+                    }
                 }
             }
             _ => return Err(InvalidInstruction.into()),
@@ -240,6 +258,15 @@ impl BridgeInstruction {
         let (key, rest) = input.split_at(PUBKEY_BYTES);
         let pk = Pubkey::new(key);
         Ok((pk, rest))
+    }
+
+    fn unpack_nbytes(input: &[u8], n: u8) -> Result<(&[u8], &[u8]), ProgramError> {
+        if input.len() < n as usize {
+            msg!("Pubkey cannot be unpacked");
+            return Err(InstructionUnpackError.into());
+        }
+        let (key, rest) = input.split_at(n as usize);
+        Ok((key, rest))
     }
 
     pub fn pack(&self) -> Vec<u8> {
