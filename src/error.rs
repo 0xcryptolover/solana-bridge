@@ -65,9 +65,10 @@ pub enum BridgeError {
     InvalidUnshieldRequestUsed,
     /// Invalid signer.
     #[error("Invalid signer")]
-    InvalidSigner,
-    #[error("Key in data store not exist")]
-    KeyNotExist,
+    InvalidSigner, // 20
+    /// Invalid signer token authority.
+    #[error("Invalid signer token authority")]
+    InvalidSignerTokenAuth,
 }
 
 impl From<BridgeError> for ProgramError {

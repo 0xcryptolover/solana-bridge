@@ -318,10 +318,8 @@ fn process_init_beacon(
     let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
     let vault_acc = next_account_info(account_info_iter)?;
-    let dapp_acc = next_account_info(account_info_iter)?;
     assert_rent_exempt(rent, incognito_proxy)?;
     assert_rent_exempt(rent, vault_acc)?;
-    assert_rent_exempt(rent, dapp_acc)?;
     let mut incognito_proxy_info = assert_uninitialized::<IncognitoProxy>(incognito_proxy)?;
     if incognito_proxy.owner != program_id {
         msg!("Invalid incognito proxy");
@@ -334,7 +332,6 @@ fn process_init_beacon(
     incognito_proxy_info.beacons = init_beacon_info.beacons;
     IncognitoProxy::pack(incognito_proxy_info, &mut incognito_proxy.data.borrow_mut())?;
     _process_init_map(vault_acc)?;
-    _process_init_map_dapp(dapp_acc)?;
 
     Ok(())
 }
@@ -351,7 +348,6 @@ fn process_submit_burn_proof(
     let vault_account = next_account_info(account_info_iter)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
-    let dapp_data = next_account_info(account_info_iter)?;
     let incognito_proxy_info = IncognitoProxy::unpack_unchecked(&incognito_proxy.data.borrow())?;
     if !incognito_proxy_info.is_initialized() {
         return Err(BridgeError::BeaconsUnInitialized.into())
@@ -397,7 +393,7 @@ fn process_submit_burn_proof(
     let shard_id = u8::from_le_bytes(*shard_id);
     let token_key = Pubkey::new(token);
     let receiver_key = Pubkey::new(receiver_key);
-    let mut amount_u64 = u64::from_be_bytes(*amount);
+    let unshield_amount_u64 = u64::from_be_bytes(*amount);
 
     // validate metatype and key provided
     if meta_type != 158 || shard_id != 1 {
@@ -466,18 +462,21 @@ fn process_submit_burn_proof(
     //     return Err(BridgeError::InvalidBeaconMerkleTree.into());
     // }
 
+    // prepare to transfer token to user
+    let authority_signer_seeds = &[
+        incognito_proxy.key.as_ref(),
+        &[incognito_proxy_info.bump_seed],
+    ];
+
     _process_insert_entry(vault_account, program_id, tx_id)?;
-    let mut map_state = try_from_slice_unchecked::<Dapp>(&dapp_data.data.borrow())?;
-    let mut key_prepare = receiver_key.to_bytes().to_vec();
-    key_prepare.extend_from_slice(token);
-    let key = hash(&key_prepare[..]);
-    if map_state.map.contains_key(key.as_ref()) {
-        amount_u64 = amount_u64
-            .checked_add( *map_state.map.get(key.as_ref()).unwrap())
-            .ok_or(BridgeError::AmountOverflow).unwrap();
-    }
-    map_state.map.insert(key.to_bytes(), amount_u64);
-    map_state.serialize(&mut &mut dapp_data.data.borrow_mut()[..])?;
+    spl_token_transfer(TokenTransferParams {
+        source: vault_token_account.clone(),
+        destination: unshield_token_account.clone(),
+        amount: unshield_amount_u64,
+        authority: vault_authority_account.clone(),
+        authority_signer_seeds,
+        token_program: token_program.clone(),
+    })?;
 
     Ok(())
 }
@@ -489,13 +488,15 @@ fn process_withdraw_request(
     program_id: &Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
+    let signer_token_account = next_account_info(account_info_iter)?;
     let vault_token_account = next_account_info(account_info_iter)?;
+    let incognito_proxy = next_account_info(account_info_iter)?;
     let signer = next_account_info(account_info_iter)?;
     if !signer.is_signer {
         return Err(BridgeError::InvalidSigner.into());
     }
-    let incognito_proxy = next_account_info(account_info_iter)?;
-    let dapp_data = next_account_info(account_info_iter)?;
+    let signer_authority_token = next_account_info(account_info_iter)?;
+    let token_program = next_account_info(account_info_iter)?;
     let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
     let authority_signer_seeds = &[
         incognito_proxy.key.as_ref(),
@@ -519,25 +520,30 @@ fn process_withdraw_request(
         msg!("Only send to incognito proxy account will be accepted");
         return Err(ProgramError::IncorrectProgramId);
     }
-    let mut key_prepare = signer.key.to_bytes().to_vec();
-    key_prepare.extend_from_slice(vault_token_account_info.mint.as_ref());
-    let key = hash(&key_prepare[..]);
-    let mut map_state = try_from_slice_unchecked::<Dapp>(&dapp_data.data.borrow())?;
-    if !map_state.map.contains_key(key.as_ref()) {
-        return Err(BridgeError::KeyNotExist.into());
-    }
-    let current_amount = *map_state.map.get(key.as_ref()).unwrap();
-    let amount_left = current_amount
-        .checked_sub(amount)
-        .ok_or(BridgeError::AmountOverflow).unwrap();
 
-    if amount_left == 0 {
-        map_state.map.remove(key.as_ref()).unwrap();
-    } else {
-        map_state.map.insert(key.to_bytes(), amount_left);
+    let (pda, bump) = Pubkey::find_program_address(
+        &[signer.key.as_ref()],
+        program_id
+    );
+
+    if pda != *signer_authority_token.key {
+        return Err(BridgeError::InvalidSignerTokenAuth.into());
     }
 
-    map_state.serialize(&mut &mut dapp_data.data.borrow_mut()[..])?;
+    let authority_signer_seeds = &[
+        signer.key.as_ref(),
+        &[bump],
+    ];
+
+    spl_token_transfer(TokenTransferParams {
+        source: signer_token_account.clone(),
+        destination: vault_token_account.clone(),
+        amount,
+        authority: signer_authority_token.clone(),
+        authority_signer_seeds,
+        token_program: token_program.clone(),
+    })?;
+
     msg!("Issue pToken to incognitoproxy,address,token,amount:{},{},{},{}", incognito_proxy.key,str::from_utf8(&inc_address[..]).unwrap(), vault_token_account_info.mint, amount);
 
     Ok(())
@@ -549,30 +555,30 @@ fn process_dapp_interaction(
     program_id: &Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    let vault_source_token = next_account_info(account_info_iter)?;
-    let dest_token = next_account_info(account_info_iter)?;
-    let vault_source_token_temp = next_account_info(account_info_iter)?;
-    let signer =  next_account_info(account_info_iter)?;
-    let pda_provided =  next_account_info(account_info_iter)?;
-    let pda_provided =  next_account_info(account_info_iter)?;
+    let signer = next_account_info(account_info_iter)?;
     if !signer.is_signer {
         return Err(BridgeError::InvalidSigner.into());
     }
-    let (pda, bump) = Pubkey::find_program_address(
+    let (_, bump) = Pubkey::find_program_address(
         &[signer.key.as_ref()],
         program_id
     );
 
+    let authority_signer_seeds = &[
+        signer.key.as_ref(),
+        &[bump],
+    ];
 
     let mut accounts_invoke = Vec::with_capacity(dapp_request.num_acc as usize + 1);
     let mut accounts_info = Vec::with_capacity(dapp_request.num_acc as usize + 1);
-    for _ in 0..dapp_request.num_acc {
+    for i in 0..dapp_request.num_acc {
         let next_acc: &AccountInfo = next_account_info(account_info_iter)?;
         accounts_info.push(next_acc.clone());
+        let is_signer = next_acc.is_signer || dapp_request.sign_index == i;
         if !next_acc.is_writable {
-            accounts_invoke.push(AccountMeta::new_readonly(*next_acc.key, next_acc.is_signer));
+            accounts_invoke.push(AccountMeta::new_readonly(*next_acc.key, is_signer));
         } else {
-            accounts_invoke.push(AccountMeta::new(*next_acc.key, next_acc.is_signer));
+            accounts_invoke.push(AccountMeta::new(*next_acc.key, is_signer));
         }
     }
     let program_dest = next_account_info(account_info_iter)?;
@@ -585,7 +591,7 @@ fn process_dapp_interaction(
     invoke_signed(
         &new_inst,
         &accounts_info[..],
-
+        &[authority_signer_seeds],
     ).unwrap();
 
     Ok(())
@@ -624,27 +630,6 @@ fn _process_insert_entry(vault: &AccountInfo, program_id: &Pubkey, txid: &[u8; 3
 
     map_state.map.insert(*txid, true);
     map_state.serialize(&mut &mut vault.data.borrow_mut()[..])?;
-
-    Ok(())
-}
-
-fn _process_init_map_dapp(dapp: &AccountInfo) -> ProgramResult {
-    if !dapp.is_writable || dapp.data.borrow().len() < 1 {
-        return Err(BridgeError::InvalidMapAccount.into())
-    }
-
-    let mut map_state = try_from_slice_unchecked::<Dapp>(&dapp.data.borrow()).unwrap();
-    if map_state.is_initialized != 0 {
-        msg!("map initialized");
-        return Err(BridgeError::AccInitialized.into())
-    }
-
-    let empty_map = BTreeMap::new();
-
-    map_state.is_initialized = 1;
-    map_state.map = empty_map;
-
-    map_state.serialize(&mut &mut dapp.data.borrow_mut()[..])?;
 
     Ok(())
 }

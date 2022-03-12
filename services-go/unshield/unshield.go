@@ -14,6 +14,7 @@ import (
 )
 
 const UNSHIELD_TAG = 0x1
+const SUBMIT_PROOF = 0x4
 
 type decodedProof struct {
 	Instruction []byte
@@ -62,7 +63,11 @@ func (us *Unshield) Build() *solana.GenericInstruction {
 	}
 
 	// build unshield instruction
-	temp := append([]byte{UNSHIELD_TAG}, proof.Instruction...)
+	tag := UNSHIELD_TAG
+	if us.getProofMethod != "getsolburnproof" {
+		tag = SUBMIT_PROOF
+	}
+	temp := append([]byte{byte(tag)}, proof.Instruction...)
 	heightBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(heightBytes, proof.Heights[0].Uint64())
 	temp = append(temp, heightBytes...)
@@ -166,7 +171,7 @@ func getBurnProofV2(
 }
 
 func decodeProof(r *getProofResult) (*decodedProof, error) {
-	//r.Result.Instruction = "9d01069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f000000000015ca3ac2e71f257ccec89338437cb755857f315c2a27711c8e39302deb50c4de00000000000000000000000000000000000000000000000000000000005f5e1009973425c49305b8c47fe2fd673b73824889c7a2c79e2745b9fe2f3bb2c43ff3e0000000000000000000000000000000000000000000000000000000000000000"
+	//r.Result.Instruction = "9e0198114aab002770023fa97352bfd1404a5c22f46d3b54b57acc9fb1b4a9051e55d10ffa9da8016954409eca41dc51ef8fe9f2303af250c33773ee531f3b01bc430000000000000000000000000000000000000000000000000000000005f5e100373f1b9482f22612c1a14ccdb6e91098b5d009bc0b97befbe856a94c8b9170ed0000000000000000000000000000000000000000000000000000000000000000"
 	inst := decode(r.Result.Instruction)
 	fmt.Printf("inst: %d %x\n", len(inst), inst)
 	fmt.Printf("instHash (isWithdrawed, without height): %x\n", keccak256(inst))

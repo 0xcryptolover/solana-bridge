@@ -7,20 +7,23 @@ import (
 )
 
 const SHIELD_TAG = 0x00
+const WITHDRAW_REQUEST = 0x05
 
 type Shield struct {
 	incAddress string
-	amount uint64
-	programID solana.PublicKey
-	accounts []*solana.AccountMeta
+	amount     uint64
+	programID  solana.PublicKey
+	accounts   []*solana.AccountMeta
+	tag        byte
 }
 
-func NewShield(incAddress string, amount uint64, programID solana.PublicKey, accounts []*solana.AccountMeta) Shield {
+func NewShield(incAddress string, amount uint64, programID solana.PublicKey, accounts []*solana.AccountMeta, tag byte) Shield {
 	return Shield{
 		incAddress: incAddress,
-		amount: amount,
-		programID: programID,
-		accounts: accounts,
+		amount:     amount,
+		programID:  programID,
+		accounts:   accounts,
+		tag:        tag,
 	}
 }
 
@@ -41,7 +44,7 @@ func (sh *Shield) Build() *solana.GenericInstruction {
 	amountBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(amountBytes, sh.amount)
 	// instruction tag + shield amount + inc
-	temp1 := append([]byte{SHIELD_TAG}, amountBytes...)
+	temp1 := append([]byte{sh.tag}, amountBytes...)
 	shieldData := append(temp1, incAddressBytes...)
 	accountSlice := solana.AccountMetaSlice{}
 	err := accountSlice.SetAccounts(
@@ -53,8 +56,8 @@ func (sh *Shield) Build() *solana.GenericInstruction {
 	}
 
 	return solana.NewInstruction(
-			sh.programID,
-			accountSlice,
-			shieldData,
-		)
+		sh.programID,
+		accountSlice,
+		shieldData,
+	)
 }

@@ -159,12 +159,8 @@ pub struct DappRequest {
     pub inst: Vec<u8>,
     // number of accounts
     pub num_acc: u8,
-    // source token index
-    pub source_index: u8,
-    // dest token index
-    pub dest_index: u8,
-    // source token amount
-    pub amount: u64,
+    // sign acc index
+    pub sign_index: u8,
 }
 
 /// Reserve liquidity

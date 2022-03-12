@@ -63,12 +63,19 @@ impl BridgeInstruction {
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         let (tag, rest) = input.split_first().ok_or(InvalidInstruction)?;
         Ok(match tag {
-            0 => {
+            0 | 5 => {
                 let (amount, rest) = Self::unpack_u64(rest)?;
                 let (inc_address, _) = Self::unpack_bytes148(rest)?;
-                Self::Shield {
-                    amount,
-                    inc_address: inc_address.clone()
+                if *tag == 0 {
+                    Self::Shield {
+                        amount,
+                        inc_address: inc_address.clone()
+                    }
+                } else {
+                    Self::WithdrawRequest {
+                        amount,
+                        inc_address: inc_address.clone()
+                    }
                 }
             },
             1 | 4 => {
@@ -146,20 +153,15 @@ impl BridgeInstruction {
                 }
             },
             3 => {
-                let (inst_len, rest) = Self::unpack_u8(rest)?;
+                let (inst_len, rest) = Self::unpack_u8(rest)?; // todo upgrade inst length
                 let (inst_data, rest) = Self::unpack_nbytes(rest, inst_len)?;
                 let (acc_len, rest) = Self::unpack_u8(rest)?;
-                let (source_index, rest) = Self::unpack_u8(rest)?;
-                let (dest_index, rest) = Self::unpack_u8(rest)?;
-                let (amount, _) = Self::unpack_u64(rest)?;
-
+                let (sign_index, _) = Self::unpack_u8(rest)?;
                 Self::DappInteraction {
                     dapp_request: DappRequest {
                         inst: inst_data.to_vec(),
                         num_acc: acc_len,
-                        source_index,
-                        dest_index,
-                        amount,
+                        sign_index
                     }
                 }
             }
