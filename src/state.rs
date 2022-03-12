@@ -9,6 +9,17 @@ use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use borsh::{BorshSerialize, BorshDeserialize};
 use crate::error::BridgeError;
 
+/// ====== INCOGNITO DAPP =======
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
+pub struct Dapp {
+    pub is_initialized: u8,
+    pub map: BTreeMap<[u8; 32], u64> // pubkey : [token id + amount]
+}
+
+impl Dapp {
+    const LEN: usize = 1 + (4 + (200 * 40)); //
+}
+
 /// ====== INCOGNITO VAULT =======
 #[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct Vault {
@@ -148,6 +159,12 @@ pub struct DappRequest {
     pub inst: Vec<u8>,
     // number of accounts
     pub num_acc: u8,
+    // source token index
+    pub source_index: u8,
+    // dest token index
+    pub dest_index: u8,
+    // source token amount
+    pub amount: u64,
 }
 
 /// Reserve liquidity

@@ -62,7 +62,12 @@ pub enum BridgeError {
     InvalidMapAccount,
     /// Unshield request used.
     #[error("Unshield request used")]
-    InvalidUnshieldRequestUsed
+    InvalidUnshieldRequestUsed,
+    /// Invalid signer.
+    #[error("Invalid signer")]
+    InvalidSigner,
+    #[error("Key in data store not exist")]
+    KeyNotExist,
 }
 
 impl From<BridgeError> for ProgramError {

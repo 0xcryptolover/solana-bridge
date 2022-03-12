@@ -43,6 +43,19 @@ pub enum BridgeInstruction {
         /// beacon info
         dapp_request: DappRequest,
     },
+
+    ///// submit burn proof from incognito chain
+    SubmitBurnProof {
+        /// burn proof info
+        burn_proof: UnshieldRequest,
+    },
+
+    ///// withdraw request
+    WithdrawRequest {
+        /// withdraw request
+        amount: u64,
+        inc_address: [u8; 148],
+    },
 }
 
 impl BridgeInstruction {
@@ -58,7 +71,7 @@ impl BridgeInstruction {
                     inc_address: inc_address.clone()
                 }
             },
-            1 => {
+            1 | 4 => {
                 let (inst, rest) =  Self::unpack_bytes162(rest)?;
                 let (height, rest) = Self::unpack_u64(rest)?;
                 let (inst_paths_len,mut rest) = Self::unpack_u8(rest)?;
@@ -91,16 +104,24 @@ impl BridgeInstruction {
                     rest = rest_;
                     signatures.push(*signature);
                 }
-                Self::UnShield {
-                    unshield_info: UnshieldRequest {
-                        inst: *inst,
-                        height,
-                        inst_paths,
-                        inst_path_is_lefts,
-                        inst_root: *inst_root,
-                        blk_data: *blk_data,
-                        indexes,
-                        signatures,
+
+                let incognito_proof = UnshieldRequest {
+                    inst: *inst,
+                    height,
+                    inst_paths,
+                    inst_path_is_lefts,
+                    inst_root: *inst_root,
+                    blk_data: *blk_data,
+                    indexes,
+                    signatures,
+                };
+                if *tag == 4 {
+                    Self::SubmitBurnProof {
+                        burn_proof: incognito_proof,
+                    }
+                } else {
+                    Self::UnShield {
+                        unshield_info: incognito_proof,
                     }
                 }
             },
@@ -127,11 +148,18 @@ impl BridgeInstruction {
             3 => {
                 let (inst_len, rest) = Self::unpack_u8(rest)?;
                 let (inst_data, rest) = Self::unpack_nbytes(rest, inst_len)?;
-                let (acc_len, _) = Self::unpack_u8(rest)?;
+                let (acc_len, rest) = Self::unpack_u8(rest)?;
+                let (source_index, rest) = Self::unpack_u8(rest)?;
+                let (dest_index, rest) = Self::unpack_u8(rest)?;
+                let (amount, _) = Self::unpack_u64(rest)?;
+
                 Self::DappInteraction {
                     dapp_request: DappRequest {
                         inst: inst_data.to_vec(),
                         num_acc: acc_len,
+                        source_index,
+                        dest_index,
+                        amount,
                     }
                 }
             }
