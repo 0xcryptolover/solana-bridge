@@ -11,6 +11,7 @@ thiserror = "1.0.29"
 spl-token = {version = "3.2.0", features = ["no-entrypoint"]}
 arrayref = "0.3.6"
 borsh = "0.9.3"
+spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"]}
 
 [features]
 test-bpf = []

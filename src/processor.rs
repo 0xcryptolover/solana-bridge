@@ -22,9 +22,9 @@ use arrayref::{array_refs, array_ref};
 use solana_program::serialize_utils::read_u8;
 use crate::{error::BridgeError, instruction::BridgeInstruction, state::{UnshieldRequest, IncognitoProxy, Vault}};
 use crate::state::{Dapp, DappRequest};
+use spl_associated_token_account::{get_associated_token_address};
 
 const LEN: usize = 1 + 1 + 32 + 32 + 32 + 32; // ignore last 32 bytes in instruction
-const ASC: [u8; 32] = [0x8c,0x97,0x25,0x8f,0x4e,0x24,0x89,0xf1,0xbb,0x3d,0x10,0x29,0x14,0x8e,0x0d,0x83,0x0b,0x5a,0x13,0x99,0xda,0xff,0x10,0x84,0x04,0x8e,0x7b,0xd8,0xdb,0xe9,0xf8,0x59];
 
 pub fn process_instruction(
         program_id: &Pubkey,
@@ -92,20 +92,13 @@ fn process_shield(
         incognito_proxy.key.as_ref(),
         &[incognito_proxy_info.bump_seed],
     ];
-
     let vault_authority_pubkey =
-    Pubkey::create_program_address(authority_signer_seeds, program_id)?;
+        Pubkey::create_program_address(authority_signer_seeds, program_id)?;
 
-    let asc_key = Pubkey::new(&ASC);
-    let incognio_proxy_associated_acc = Pubkey::find_program_address(
-        &[
-            &vault_authority_pubkey.to_bytes(),
-            &spl_token::id().to_bytes(),
-            &vault_token_account_info.mint.to_bytes(),
-        ],
-        &asc_key,
-    ).0;
-
+    let incognio_proxy_associated_acc = get_associated_token_address(
+        &vault_authority_pubkey,
+        &vault_token_account_info.mint
+    );
     if incognio_proxy_associated_acc != *vault_token_account.key {
         msg!("Only send to incognito proxy account will be accepted");
         return Err(ProgramError::IncorrectProgramId);
@@ -506,15 +499,10 @@ fn process_withdraw_request(
     let vault_authority_pubkey =
         Pubkey::create_program_address(authority_signer_seeds, program_id)?;
 
-    let asc_key = Pubkey::new(&ASC);
-    let incognio_proxy_associated_acc = Pubkey::find_program_address(
-        &[
-            &vault_authority_pubkey.to_bytes(),
-            &spl_token::id().to_bytes(),
-            &vault_token_account_info.mint.to_bytes(),
-        ],
-        &asc_key,
-    ).0;
+    let incognio_proxy_associated_acc = get_associated_token_address(
+        &vault_authority_pubkey,
+        &vault_token_account_info.mint
+    );
 
     if incognio_proxy_associated_acc != *vault_token_account.key {
         msg!("Only send to incognito proxy account will be accepted");
