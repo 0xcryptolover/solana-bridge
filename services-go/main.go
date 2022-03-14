@@ -185,7 +185,7 @@ func main() {
 	spew.Dump(sig)
 
 	fmt.Println("============ TEST UNSHIELD TOKEN ACCOUNT =============")
-	txBurn2 := "b44a7d2fcc65a18392eda206842950b16e46529422f8543ad2bc3d593199047b"
+	txBurn2 := "860e3d8a207872c430304bdd44dfe920c62b518dff2a802e0afe04ef997f2cbd"
 	signers3 := []solana.PrivateKey{
 		feePayer,
 	}
@@ -216,13 +216,41 @@ func main() {
 		solana.TransactionPayer(feePayer.PublicKey()),
 	)
 	if err != nil {
-		//panic(err)
+		panic(err)
 	}
 	sig, err = SignAndSendTx(tx3, signers3, rpcClient)
 	if err != nil {
-		//panic(err)
+		panic(err)
 	}
 	spew.Dump(sig)
+
+	fmt.Println("============ GET RAYDIUM SWAP RATE =============")
+	ammAcc := solana.MustPublicKeyFromBase58("HeD1cekRWUNR25dcvW8c9bAHeKbr1r7qKEhv7pEegr4f")
+	poolTokenAmm := solana.MustPublicKeyFromBase58("3qbeXHwh9Sz4zabJxbxvYGJc57DZHrFgYMCWnaeNJENT")
+	pcTokenAmm := solana.MustPublicKeyFromBase58("FrGPG5D4JZVF5ger7xSChFVFL8M9kACJckzyCz8tVowz")
+	poolTokenBal, err := rpcClient.GetTokenAccountBalance(context.Background(), poolTokenAmm, rpc.CommitmentConfirmed)
+	if err != nil {
+		panic(err)
+	}
+	pcTokenBal, err := rpcClient.GetTokenAccountBalance(context.Background(), pcTokenAmm, rpc.CommitmentConfirmed)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("pool token bal: %v \n", poolTokenBal.Value.Amount)
+	fmt.Printf("pc token bal: %v \n", pcTokenBal.Value.Amount)
+
+	ammId := solana.MustPublicKeyFromBase58("HeD1cekRWUNR25dcvW8c9bAHeKbr1r7qKEhv7pEegr4f")
+	resp, err := rpcClient.GetAccountInfo(
+		context.TODO(),
+		ammId,
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(len(resp.Value.Data.GetBinary()))
+	// todo: extract fee
+
 
 	fmt.Println("============ SWAP ON RAYDIUM =============")
 	// create and mint token
@@ -233,12 +261,12 @@ func main() {
 	swapAccounts := []*solana.AccountMeta{
 		solana.NewAccountMeta(signer.PublicKey(), false, true),
 		solana.NewAccountMeta(solana.TokenProgramID, false, false),
-		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("HeD1cekRWUNR25dcvW8c9bAHeKbr1r7qKEhv7pEegr4f"), true, false),  // amm account
+		solana.NewAccountMeta(ammAcc, true, false),  // amm account
 		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("DhVpojXMTbZMuTaCgiiaFU7U8GvEEhnYo4G9BUdiEYGh"), false, false), // amm authority
 		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("HboQAt9BXyejnh6SzdDNTx4WELMtRRPCr7pRSLpAW7Eq"), true, false),  // amm open orders
 		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("6TzAjFPVZVMjbET8vUSk35J9U2dEWFCrnbHogsejRE5h"), true, false),  // amm target order
-		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("3qbeXHwh9Sz4zabJxbxvYGJc57DZHrFgYMCWnaeNJENT"), true, false),  // pool_token_coin Amm
-		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("FrGPG5D4JZVF5ger7xSChFVFL8M9kACJckzyCz8tVowz"), true, false),  // pool_token_pc Amm
+		solana.NewAccountMeta(poolTokenAmm, true, false),  // pool_token_coin Amm
+		solana.NewAccountMeta(pcTokenAmm, true, false),  // pool_token_pc Amm
 		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("DESVgJVGajEgKGXhb6XmqDHGz3VjdgP7rEVESBgxmroY"), false, false), // serum dex
 		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("3tsrPhKrWHWMB8RiPaqNxJ8GnBhZnDqL4wcu5EAMFeBe"), true, false),  // serum market accounts
 		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("ANHHchetdZVZBuwKWgz8RSfVgCDsRpW9i2BNWrmG9Jh9"), true, false),  // bid account
