@@ -140,14 +140,15 @@ fn process_unshield(
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let vault_token_account = next_account_info(account_info_iter)?;
-    let unshield_token_account = next_account_info(account_info_iter)?;
+    let unshield_maker = next_account_info(account_info_iter)?;
     let vault_authority_account = next_account_info(account_info_iter)?;
     let vault_account = next_account_info(account_info_iter)?;
     let incognito_proxy = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
+    let unshield_token_account = next_account_info(account_info_iter)?;
     let incognito_proxy_info = IncognitoProxy::unpack_unchecked(&incognito_proxy.data.borrow())?;
     if !incognito_proxy_info.is_initialized() {
-       return Err(BridgeError::BeaconsUnInitialized.into())
+        return Err(BridgeError::BeaconsUnInitialized.into())
     }
 
     if incognito_proxy_info.vault != *vault_account.key {
@@ -204,9 +205,8 @@ fn process_unshield(
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
 
-    let is_wsol = token_key == spl_token::native_mint::id();
-    if !is_wsol && receiver_key != *unshield_token_account.key {
-        msg!("Receive key and key provided not match {}, {}", receiver_key, *unshield_token_account.key);
+    if receiver_key != *unshield_maker.key {
+        msg!("Receive key and key provided not match {}, {}", receiver_key, *unshield_maker.key);
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
 
@@ -268,6 +268,7 @@ fn process_unshield(
         &[incognito_proxy_info.bump_seed],
     ];
 
+    // transfer token
     spl_token_transfer(TokenTransferParams {
         source: vault_token_account.clone(),
         destination: unshield_token_account.clone(),
@@ -277,21 +278,27 @@ fn process_unshield(
         token_program: token_program.clone(),
     })?;
 
-    // handle native token
-    if is_wsol {
+    let is_wsol = token_key == spl_token::native_mint::id();
+    if !is_wsol {
+        let unshield_maker_associated_acc = get_associated_token_address(
+            &unshield_maker.key,
+            &token_key
+        );
+
+        if unshield_maker_associated_acc != *unshield_token_account.key {
+            msg!("Receive key and key provided not match {}, {}", unshield_maker_associated_acc, *unshield_token_account.key);
+            return Err(BridgeError::InvalidKeysInInstruction.into());
+        }
+    } else {
+        // handle native token
         if *vault_token_account.key == *unshield_token_account.key {
             msg!("Invalid sender and receiver in unshield request");
-            return Err(BridgeError::InvalidTransferTokenData.into());
-        }
-        let receiver_acc = next_account_info(account_info_iter)?;
-        if *receiver_acc.key != receiver_key {
-            msg!("Mismatch receiver_key in inst and provided account");
             return Err(BridgeError::InvalidTransferTokenData.into());
         }
         // close account
         spl_close_token_acc(TokenCloseParams {
             account: unshield_token_account.clone(),
-            destination: receiver_acc.clone(),
+            destination: unshield_maker.clone(),
             authority: vault_authority_account.clone(),
             authority_signer_seeds,
             token_program: token_program.clone(),
