@@ -49,10 +49,6 @@ pub fn process_instruction(
             msg!("Instruction: dapp interaction");
             process_dapp_interaction(accounts, dapp_request, program_id)
         }
-        BridgeInstruction::SubmitBurnProof {burn_proof} => {
-            msg!("Instruction: submit proof");
-            process_submit_burn_proof(accounts, burn_proof, program_id)
-        }
         BridgeInstruction::WithdrawRequest{ amount, inc_address } => {
             msg!("Instruction: Withdraw Request");
             process_withdraw_request(accounts, amount, inc_address, program_id)
@@ -176,7 +172,7 @@ fn process_unshield(
     let unshield_amount_u64 = u64::from_be_bytes(*unshield_amount);
 
     // validate metatype and key provided
-    if meta_type != 157 || shard_id != 1 {
+    if (meta_type != 157 && meta_type != 158) || shard_id != 1 {
         msg!("Invalid beacon instruction metatype {}, {}", meta_type, shard_id);
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
@@ -264,31 +260,49 @@ fn process_unshield(
         token_program: token_program.clone(),
     })?;
 
-    let is_wsol = token_key == spl_token::native_mint::id();
-    if !is_wsol {
-        let unshield_maker_associated_acc = get_associated_token_address(
-            &unshield_maker.key,
-            &token_key
-        );
+    match meta_type {
+        157 => {
+            let is_wsol = token_key == spl_token::native_mint::id();
+            if !is_wsol {
+                let unshield_maker_associated_acc = get_associated_token_address(
+                    &unshield_maker.key,
+                    &token_key
+                );
 
-        if unshield_maker_associated_acc != *unshield_token_account.key {
-            msg!("Receive key and key provided not match {}, {}", unshield_maker_associated_acc, *unshield_token_account.key);
-            return Err(BridgeError::InvalidKeysInInstruction.into());
+                if unshield_maker_associated_acc != *unshield_token_account.key {
+                    msg!("unshield_maker_associated_acc and key provided not match {}, {}", unshield_maker_associated_acc, *unshield_token_account.key);
+                    return Err(BridgeError::InvalidKeysInInstruction.into());
+                }
+            } else {
+                // handle native token
+                if *vault_token_account.key == *unshield_token_account.key {
+                    msg!("Invalid sender and receiver in unshield request");
+                    return Err(BridgeError::InvalidTransferTokenData.into());
+                }
+                // close account
+                spl_close_token_acc(TokenCloseParams {
+                    account: unshield_token_account.clone(),
+                    destination: unshield_maker.clone(),
+                    authority: vault_authority_account.clone(),
+                    authority_signer_seeds,
+                    token_program: token_program.clone(),
+                })?;
+            }
+        },
+        158 => {
+            let (pda, _) = Pubkey::find_program_address(
+                &[unshield_maker.key.as_ref()],
+                program_id
+            );
+            let pda_associated_token_acc = get_associated_token_address(&pda, &token_key);
+            if pda_associated_token_acc != *unshield_token_account.key {
+                msg!("unshield_maker_associated_acc and key provided not match {}, {}", pda_associated_token_acc, *unshield_token_account.key);
+                return Err(BridgeError::InvalidKeysInInstruction.into());
+            }
+        },
+        _ => {
+            return Err(BridgeError::InvalidMetaType.into());
         }
-    } else {
-        // handle native token
-        if *vault_token_account.key == *unshield_token_account.key {
-            msg!("Invalid sender and receiver in unshield request");
-            return Err(BridgeError::InvalidTransferTokenData.into());
-        }
-        // close account
-        spl_close_token_acc(TokenCloseParams {
-            account: unshield_token_account.clone(),
-            destination: unshield_maker.clone(),
-            authority: vault_authority_account.clone(),
-            authority_signer_seeds,
-            token_program: token_program.clone(),
-        })?;
     }
 
     Ok(())
@@ -318,151 +332,6 @@ fn process_init_beacon(
     incognito_proxy_info.beacons = init_beacon_info.beacons;
     IncognitoProxy::pack(incognito_proxy_info, &mut incognito_proxy.data.borrow_mut())?;
     _process_init_map(vault_acc)?;
-
-    Ok(())
-}
-
-fn process_submit_burn_proof(
-    accounts: &[AccountInfo],
-    burn_proof: UnshieldRequest,
-    program_id: &Pubkey,
-) -> ProgramResult {
-    let account_info_iter = &mut accounts.iter();
-    let vault_token_account = next_account_info(account_info_iter)?;
-    let unshield_token_account = next_account_info(account_info_iter)?;
-    let vault_authority_account = next_account_info(account_info_iter)?;
-    let vault_account = next_account_info(account_info_iter)?;
-    let incognito_proxy = next_account_info(account_info_iter)?;
-    let token_program = next_account_info(account_info_iter)?;
-    let incognito_proxy_info = IncognitoProxy::unpack_unchecked(&incognito_proxy.data.borrow())?;
-    if !incognito_proxy_info.is_initialized() {
-        return Err(BridgeError::BeaconsUnInitialized.into())
-    }
-
-    if incognito_proxy_info.vault != *vault_account.key {
-        msg!("Send to wrong vault account");
-        return Err(ProgramError::IncorrectProgramId);
-    }
-
-    if incognito_proxy.owner != program_id {
-        msg!("Invalid incognito proxy");
-        return Err(ProgramError::IncorrectProgramId);
-    }
-
-    // extract data from input
-    let inst = burn_proof.inst;
-    if inst.len() < LEN {
-        msg!("Invalid instruction input");
-        return Err(BridgeError::InvalidBeaconInstruction.into());
-    }
-    let inst_ = array_ref![inst, 0, LEN];
-    #[allow(clippy::ptr_offset_with_cast)]
-        let (
-        meta_type,
-        shard_id,
-        token,
-        receiver_key,
-        _,
-        amount,
-        tx_id, // todo: store this data
-    ) = array_refs![
-        inst_,
-        1,
-        1,
-        32,
-        32,
-        24,
-        8,
-        32
-    ];
-    let meta_type = u8::from_le_bytes(*meta_type);
-    let shard_id = u8::from_le_bytes(*shard_id);
-    let token_key = Pubkey::new(token);
-    let receiver_key = Pubkey::new(receiver_key);
-    let unshield_amount_u64 = u64::from_be_bytes(*amount);
-
-    // validate metatype and key provided
-    if meta_type != 158 || shard_id != 1 {
-        msg!("Invalid beacon instruction metatype {}, {}", meta_type, shard_id);
-        return Err(BridgeError::InvalidKeysInInstruction.into());
-    }
-
-    let unshield_account_info = TokenAccount::unpack(&unshield_token_account.try_borrow_data()?)?;
-    if token_key != unshield_account_info.mint {
-        msg!("Token key and key provided not match {}, {}", token_key, unshield_account_info.mint);
-        return Err(BridgeError::InvalidKeysInInstruction.into());
-    }
-
-    if receiver_key != *unshield_token_account.key {
-        msg!("Receive key and key provided not match {}, {}", receiver_key, *unshield_token_account.key);
-        return Err(BridgeError::InvalidKeysInInstruction.into());
-    }
-
-    // verify beacon signature
-    if burn_proof.indexes.len() != burn_proof.signatures.len() {
-        msg!("Invalid instruction provided, length of indexes and signatures not match");
-        return Err(BridgeError::InvalidBeaconInstruction.into());
-    }
-
-    if burn_proof.signatures.len() <= incognito_proxy_info.beacons.len() * 2 / 3 {
-        msg!("Invalid instruction input");
-        return Err(BridgeError::InvalidNumberOfSignature.into());
-    }
-
-    let mut blk_data_bytes = burn_proof.blk_data.to_vec();
-    blk_data_bytes.extend_from_slice(&burn_proof.inst_root);
-    // Get double block hash from instRoot and other data
-    let blk = hash(&hash(&blk_data_bytes[..]).to_bytes());
-
-    for i in 0..burn_proof.indexes.len() {
-        let s_r_v = burn_proof.signatures[i];
-        let (s_r, v) = s_r_v.split_at(64);
-        if v.len() != 1 {
-            msg!("Invalid signature v input");
-            return Err(BridgeError::InvalidBeaconSignature.into());
-        }
-        let beacon_key_from_signature_result = secp256k1_recover(
-            &blk.to_bytes()[..],
-            v[0],
-            s_r,
-        ).unwrap();
-        let index_beacon = burn_proof.indexes[i];
-        let beacon_key = incognito_proxy_info.beacons[index_beacon as usize];
-        if beacon_key_from_signature_result != beacon_key {
-            return Err(BridgeError::InvalidBeaconSignature.into());
-        }
-    }
-
-    // append block height to instruction
-    let height_vec = append_at_top(burn_proof.height);
-    let mut inst_vec = inst.to_vec();
-    inst_vec.extend_from_slice(&height_vec);
-    let inst_hash = hash(&inst_vec[..]);
-    if !instruction_in_merkle_tree(
-        &inst_hash.to_bytes(),
-        &burn_proof.inst_root,
-        &burn_proof.inst_paths,
-        &burn_proof.inst_path_is_lefts
-    ) {
-        msg!("Invalid instruction root");
-        return Err(BridgeError::InvalidBeaconMerkleTree.into());
-    }
-
-    // prepare to transfer token to user
-    let authority_signer_seeds = &[
-        incognito_proxy.key.as_ref(),
-        &[incognito_proxy_info.bump_seed],
-    ];
-
-    _process_insert_entry(vault_account, program_id, tx_id)?;
-    spl_token_transfer(TokenTransferParams {
-        source: vault_token_account.clone(),
-        destination: unshield_token_account.clone(),
-        amount: unshield_amount_u64,
-        authority: vault_authority_account.clone(),
-        authority_signer_seeds,
-        token_program: token_program.clone(),
-    })?;
 
     Ok(())
 }

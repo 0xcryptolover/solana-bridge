@@ -44,12 +44,6 @@ pub enum BridgeInstruction {
         dapp_request: DappRequest,
     },
 
-    ///// submit burn proof from incognito chain
-    SubmitBurnProof {
-        /// burn proof info
-        burn_proof: UnshieldRequest,
-    },
-
     ///// withdraw request
     WithdrawRequest {
         /// withdraw request
@@ -63,7 +57,7 @@ impl BridgeInstruction {
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         let (tag, rest) = input.split_first().ok_or(InvalidInstruction)?;
         Ok(match tag {
-            0 | 5 => {
+            0 | 4 => {
                 let (amount, rest) = Self::unpack_u64(rest)?;
                 let (inc_address, _) = Self::unpack_bytes148(rest)?;
                 if *tag == 0 {
@@ -78,7 +72,7 @@ impl BridgeInstruction {
                     }
                 }
             },
-            1 | 4 => {
+            1 => {
                 let (inst, rest) =  Self::unpack_bytes162(rest)?;
                 let (height, rest) = Self::unpack_u64(rest)?;
                 let (inst_paths_len,mut rest) = Self::unpack_u8(rest)?;
@@ -122,14 +116,9 @@ impl BridgeInstruction {
                     indexes,
                     signatures,
                 };
-                if *tag == 4 {
-                    Self::SubmitBurnProof {
-                        burn_proof: incognito_proof,
-                    }
-                } else {
-                    Self::UnShield {
-                        unshield_info: incognito_proof,
-                    }
+
+                Self::UnShield {
+                    unshield_info: incognito_proof,
                 }
             },
             2 => {

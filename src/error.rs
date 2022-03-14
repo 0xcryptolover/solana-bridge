@@ -69,6 +69,9 @@ pub enum BridgeError {
     /// Invalid signer token authority.
     #[error("Invalid signer token authority")]
     InvalidSignerTokenAuth,
+    /// Invalid meta type.
+    #[error("Invalid meta type")]
+    InvalidMetaType,
 }
 
 impl From<BridgeError> for ProgramError {
