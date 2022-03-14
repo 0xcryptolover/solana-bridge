@@ -141,6 +141,17 @@ impl Pack for IncognitoProxy {
 
 }
 
+// Dapp interaction
+#[derive(Clone, Default)]
+pub struct DappRequest {
+    // instruction
+    pub inst: Vec<u8>,
+    // number of accounts
+    pub num_acc: u8,
+    // sign acc index
+    pub sign_index: u8,
+}
+
 /// Reserve liquidity
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnshieldRequest {

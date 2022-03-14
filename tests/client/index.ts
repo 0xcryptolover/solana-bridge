@@ -17,7 +17,7 @@ import { deserialize, serialize } from "borsh";
 import BN = require("bn.js");
 // vault program
 const programId = new PublicKey(
-    "BKGhwbiTHdUxcuWzZtDWyioRBieDEXTtgEk8u1zskZnk"
+    "EaDziH5DPfTWNSWaS47e14fksE2ZUYzzqmzPoSGNQLmb"
 );
 
 // connection
@@ -33,6 +33,13 @@ console.log(feePayer.publicKey.toBase58());
 const shieldMaker = Keypair.fromSecretKey(
     Uint8Array.from(Uint8Array.from([56,52,143,70,102,247,217,158,213,127,195,28,52,49,229,216,186,136,63,94,185,108,216,64,35,120,204,184,221,151,114,120,92,163,172,46,113,242,87,204,236,137,51,132,55,203,117,88,87,243,21,194,162,119,17,200,227,147,2,222,181,12,77,224]))
 );
+
+const swapMinter = Keypair.fromSecretKey(
+    Uint8Array.from(Uint8Array.from([126,218,91,206,170,129,224,44,74,68,87,211,125,45,7,198,94,231,152,88,34,136,164,192,128,193,34,233,81,123,183,57,46,183,53,172,18,161,72,81,251,126,133,235,247,180,254,81,87,40,41,88,141,85,112,158,238,230,161,11,250,198,179,133]))
+);
+
+console.log(swapMinter.publicKey.toBase58());
+console.log(toHexString(swapMinter.secretKey));
 
 (async () => {
 
@@ -147,6 +154,14 @@ const shieldMaker = Keypair.fromSecretKey(
         programId,
     });
 
+    const creatIncognitoInst = SystemProgram.createAccount({
+        fromPubkey: feePayer.publicKey,
+        newAccountPubkey: incognitoProxy.publicKey,
+        lamports: lamportsExemptBeacon,
+        space: beaconLengthInit,
+        programId,
+    });
+
     // const transaction = new Transaction()
     //     .add(
     //         SystemProgram.createAccount({
@@ -237,11 +252,11 @@ const shieldMaker = Keypair.fromSecretKey(
     // todo: query beacon state before init
     // create transaction init beacon list
     const trans_init_beacon = await setPayerAndBlockhashTransaction(
-        [creatVaultInst, init_beacon_instruction]
+        [creatIncognitoInst, creatVaultInst, init_beacon_instruction]
     );
-    // const signature_init_beacon = await signAndSendTransaction(trans_init_beacon, [feePayer, vaultAccount]);
-    // const result_init_beacon = await connection.confirmTransaction(signature_init_beacon);
-    console.log(`init beacon txhash: ${init_beacon_instruction}`);
+    const signature_init_beacon = await signAndSendTransaction(trans_init_beacon, [feePayer, vaultAccount, incognitoProxy]);
+    await connection.confirmTransaction(signature_init_beacon);
+    console.log(`init beacon txhash: ${signature_init_beacon}`);
 
     console.log("=============== Make shield request =================");
 
@@ -387,4 +402,10 @@ class ShieldDetails {
                 ['amount', 'u64'],
                 ['inc_address', [148]]]
         }]]);
+}
+
+function toHexString(byteArray: any) {
+    return Array.prototype.map.call(byteArray, function(byte) {
+        return ('0' + (byte & 0xFF).toString(16)).slice(-2);
+    }).join('');
 }

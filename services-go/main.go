@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
@@ -19,6 +20,7 @@ const SHIELD = "Shield"
 const UNSHIELD = "Unshield"
 const INCOGNITO_PROXY = "5Tq3wvYAD6hRonCiUx62k37gELxxEABSYCkaqrSP3ztv"
 const PROGRAM_ID = "BKGhwbiTHdUxcuWzZtDWyioRBieDEXTtgEk8u1zskZnk"
+const VAULT_ACC = "G65gJS4feG1KXpfDXiySUGT7c6QosCJcGa4nUZsF55Du"
 const SYNC_NATIVE_TAG = 0x11
 const NEW_TOKEN_ACC = 0x1
 const ACCCOUN_SIZE = 165
@@ -33,6 +35,11 @@ func main() {
 
 	program := solana.MustPublicKeyFromBase58(PROGRAM_ID)
 	incognitoProxy := solana.MustPublicKeyFromBase58(INCOGNITO_PROXY)
+	vaultAcc := solana.MustPublicKeyFromBase58(VAULT_ACC)
+	vaultTokenAuthority, _, err := solana.FindProgramAddress(
+		[][]byte{incognitoProxy.Bytes()},
+		program,
+	)
 	feePayer, err := solana.PrivateKeyFromBase58("588FU4PktJWfGfxtzpAAXywSNt74AvtroVzGfKkVN1LwRuvHwKGr851uH8czM5qm4iqLbs1kKoMKtMJG4ATR7Ld2")
 	if err != nil {
 		panic(err)
@@ -49,6 +56,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	tokenSell := solana.MustPublicKeyFromBase58("BEcGFQK1T1tSu3kvHC17cyCkQ5dvXqAJ7ExB2bb5Do7a")
+	tokenBuy := solana.MustPublicKeyFromBase58("FSRvxBNrQWX2Fy2qvKMLL3ryEdRtE3PUTZBcdKwASZTU")
 
 	fmt.Println("============ TRANSFER SOL =============")
 	testPubKey, err := solana.WalletFromPrivateKeyBase58("36iz7qASXP1TECiAWJ3xESwYeRmTAF7ti3SAHaYuFJqHkmKenRACcJ9q48df1Bpn4QQSv3J89BGjuznaGAh9zPXg")
@@ -72,23 +81,76 @@ func main() {
 	}
 	spew.Dump(sig0)
 
+	fmt.Println("============ TEST CREATE NEW ASSOCIATE TOKEN ACCOUNT INSTS =============")
+	signer := solana.MustPrivateKeyFromBase58("3Y6mUgjKHdaNt5CDbRhnhzq6zwSU1CzfuLG6xaCawXQoVy4s9cpz2bhyw7ccineSCsWkFq1XPmNVSB73ZHjv85QQ")
+
+	signerTokenAuthority, _, err := solana.FindProgramAddress(
+		[][]byte{signer.PublicKey().Bytes()},
+		program,
+	)
+
+	signerSellToken, _, err := solana.FindAssociatedTokenAddress(
+		signerTokenAuthority,
+		tokenSell,
+	)
+
+	newSignerSellTokenInst := associatedtokenaccount.NewCreateInstruction(
+		feePayer.PublicKey(),
+		signerTokenAuthority,
+		tokenSell,
+	).Build()
+
+	signerBuyToken, _, err := solana.FindAssociatedTokenAddress(
+		signerTokenAuthority,
+		tokenBuy,
+	)
+
+	newSignerBuyTokenInst := associatedtokenaccount.NewCreateInstruction(
+		feePayer.PublicKey(),
+		signerTokenAuthority,
+		tokenBuy,
+	).Build()
+
+	vaultSellToken, _, err := solana.FindAssociatedTokenAddress(
+		vaultTokenAuthority,
+		tokenSell,
+	)
+
+	vaultBuyToken, _, err := solana.FindAssociatedTokenAddress(
+		vaultTokenAuthority,
+		tokenBuy,
+	)
+
+	feePayerSellToken, _, err := solana.FindAssociatedTokenAddress(
+		feePayer.PublicKey(),
+		tokenSell,
+	)
+
+	newVaultSellTokenInst := associatedtokenaccount.NewCreateInstruction(
+		feePayer.PublicKey(),
+		vaultTokenAuthority,
+		tokenSell,
+	).Build()
+
+	newVaultBuyTokenInst := associatedtokenaccount.NewCreateInstruction(
+		feePayer.PublicKey(),
+		vaultTokenAuthority,
+		tokenBuy,
+	).Build()
+
 	fmt.Println("============ TEST SHIELD TOKEN ACCOUNT =============")
 
-	shieldMakerTokenAccount := solana.MustPublicKeyFromBase58("5397KrEBCuEhdTjWF5B9xjVzGJR6MyxXLP3srbrWo2gD")
-	vaultTokenAcc := solana.MustPublicKeyFromBase58("GKCSgiLWos1zEvNWKAEprngjdaazLUXMdM354Ag7CpX")
-
 	incAddress := "12shR6fDe7ZcprYn6rjLwiLcL7oJRiek66ozzYu3B3rBxYXkqJeZYj6ZWeYy4qR4UHgaztdGYQ9TgHEueRXN7VExNRGB5t4auo3jTgXVBiLJmnTL5LzqmTXezhwmQvyrRjCbED5xW7yMMeeWarKa"
-	shieldAmount := uint64(100000)
+	shieldAmount := uint64(1e8)
 	shieldAccounts := []*solana.AccountMeta{
-		solana.NewAccountMeta(shieldMakerTokenAccount, true, false),
-		solana.NewAccountMeta(vaultTokenAcc, true, false),
+		solana.NewAccountMeta(feePayerSellToken, true, false),
+		solana.NewAccountMeta(vaultSellToken, true, false),
 		solana.NewAccountMeta(incognitoProxy, false, false),
-		solana.NewAccountMeta(shieldMaker.PublicKey(), false, true),
+		solana.NewAccountMeta(feePayer.PublicKey(), false, true),
 		solana.NewAccountMeta(solana.TokenProgramID, false, false),
 	}
 	signers := []solana.PrivateKey{
 		feePayer,
-		shieldMaker,
 	}
 
 	shieldInstruction := shield.NewShield(
@@ -96,6 +158,7 @@ func main() {
 		shieldAmount,
 		program,
 		shieldAccounts,
+		byte(0),
 	)
 	shieldInsGenesis := shieldInstruction.Build()
 	if shieldInsGenesis == nil {
@@ -103,6 +166,10 @@ func main() {
 	}
 	tx, err := solana.NewTransaction(
 		[]solana.Instruction{
+			newSignerBuyTokenInst,
+			newSignerSellTokenInst,
+			newVaultSellTokenInst,
+			newVaultBuyTokenInst,
 			shieldInsGenesis,
 		},
 		recent.Value.Blockhash,
@@ -113,54 +180,57 @@ func main() {
 	}
 	sig, err := SignAndSendTx(tx, signers, rpcClient)
 	if err != nil {
-		panic(err)
-	}
-	spew.Dump(sig)
-
-	fmt.Println("============ TEST CREATE NEW ASSOCIATE TOKEN ACCOUNT =============")
-	mintPubkey := solana.MustPublicKeyFromBase58("EHheP6Wfyz65ve258TYQcfBHAAY4LsErnmXZozrgfvGr")
-	newKey := solana.NewWallet()
-
-	tx2, err := solana.NewTransaction(
-		[]solana.Instruction{
-			associatedtokenaccount.NewCreateInstruction(
-				feePayer.PublicKey(),
-				newKey.PublicKey(),
-				mintPubkey,
-			).Build(),
-		},
-		recent.Value.Blockhash,
-		solana.TransactionPayer(feePayer.PublicKey()),
-	)
-	signers2 := []solana.PrivateKey{
-		feePayer,
-	}
-	sig, err = SignAndSendTx(tx2, signers2, rpcClient)
-	if err != nil {
-		panic(err)
+		//panic(err)
 	}
 	spew.Dump(sig)
 
 	fmt.Println("============ TEST UNSHIELD TOKEN ACCOUNT =============")
-	txBurn2 := "8c2e6eaeb04896af40e33762482eb29bffa38de3c627a91bcbb7c3c3544197c3"
-	vaultAcc := solana.MustPublicKeyFromBase58("G65gJS4feG1KXpfDXiySUGT7c6QosCJcGa4nUZsF55Du")
-	signers3 := []solana.PrivateKey{
-		feePayer,
-	}
-	vaultTokenAuthority, _, err := solana.FindProgramAddress(
-		[][]byte{incognitoProxy.Bytes()},
-		program,
-	)
+	txBurn2 := "860e3d8a207872c430304bdd44dfe920c62b518dff2a802e0afe04ef997f2cbd"
+	tokenUnshield := solana.MustPublicKeyFromBase58("EHheP6Wfyz65ve258TYQcfBHAAY4LsErnmXZozrgfvGr")
+	unshieldMakerRequest := solana.MustPublicKeyFromBase58("GQcYV3Y9VXLD7HWY5bUf3JGyXYmGg1bMgs4nMMVKKBLE")
+	unshielMakerAssTokenAcc, _, err := solana.FindAssociatedTokenAddress(unshieldMakerRequest, tokenUnshield)
 	if err != nil {
 		panic(err)
 	}
+
+	fmt.Println(unshielMakerAssTokenAcc.String())
+
+	vaultAssTokenAcc, _, err := solana.FindAssociatedTokenAddress(vaultTokenAuthority, tokenUnshield)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(vaultAssTokenAcc.String())
+
+	unshieldInst := []solana.Instruction{}
+	signers3 := []solana.PrivateKey{
+		feePayer,
+	}
+	fmt.Println(tokenSell.Bytes())
+	fmt.Println(signerSellToken.Bytes())
+
 	unshieldAccounts := []*solana.AccountMeta{
-		solana.NewAccountMeta(vaultTokenAcc, true, false),
-		solana.NewAccountMeta(shieldMakerTokenAccount, true, false),
+		solana.NewAccountMeta(vaultAssTokenAcc, true, false),
+		solana.NewAccountMeta(unshieldMakerRequest, false, false),
 		solana.NewAccountMeta(vaultTokenAuthority, false, false),
 		solana.NewAccountMeta(vaultAcc, true, false),
 		solana.NewAccountMeta(incognitoProxy, false, false),
 		solana.NewAccountMeta(solana.TokenProgramID, false, false),
+		solana.NewAccountMeta(unshielMakerAssTokenAcc, true, false),
+	}
+
+	_, err = rpcClient.GetAccountInfo(context.TODO(), unshielMakerAssTokenAcc)
+	if err != nil {
+		if err.Error() == "not found" {
+			// init account
+			newUnshieldTokenAcc := associatedtokenaccount.NewCreateInstruction(
+				feePayer.PublicKey(),
+				unshieldMakerRequest,
+				tokenUnshield,
+			).Build()
+			unshieldInst = append(unshieldInst, newUnshieldTokenAcc)
+		} else {
+			panic(err)
+		}
 	}
 
 	unshield := unshield2.NewUnshield(
@@ -170,16 +240,162 @@ func main() {
 		program,
 		unshieldAccounts,
 	)
+	unshieldInst = append(unshieldInst, unshield.Build())
 	tx3, err := solana.NewTransaction(
+		unshieldInst,
+		recent.Value.Blockhash,
+		solana.TransactionPayer(feePayer.PublicKey()),
+	)
+	if err != nil {
+		panic(err)
+	}
+	sig, err = SignAndSendTx(tx3, signers3, rpcClient)
+	if err != nil {
+		panic(err)
+	}
+	spew.Dump(sig)
+
+	fmt.Println("============ GET RAYDIUM SWAP RATE =============")
+	ammAcc := solana.MustPublicKeyFromBase58("HeD1cekRWUNR25dcvW8c9bAHeKbr1r7qKEhv7pEegr4f")
+	poolTokenAmm := solana.MustPublicKeyFromBase58("3qbeXHwh9Sz4zabJxbxvYGJc57DZHrFgYMCWnaeNJENT")
+	pcTokenAmm := solana.MustPublicKeyFromBase58("FrGPG5D4JZVF5ger7xSChFVFL8M9kACJckzyCz8tVowz")
+	poolTokenBal, err := rpcClient.GetTokenAccountBalance(context.Background(), poolTokenAmm, rpc.CommitmentConfirmed)
+	if err != nil {
+		panic(err)
+	}
+	pcTokenBal, err := rpcClient.GetTokenAccountBalance(context.Background(), pcTokenAmm, rpc.CommitmentConfirmed)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("pool token bal: %v \n", poolTokenBal.Value.Amount)
+	fmt.Printf("pc token bal: %v \n", pcTokenBal.Value.Amount)
+
+	ammId := solana.MustPublicKeyFromBase58("HeD1cekRWUNR25dcvW8c9bAHeKbr1r7qKEhv7pEegr4f")
+	resp, err := rpcClient.GetAccountInfo(
+		context.TODO(),
+		ammId,
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(len(resp.Value.Data.GetBinary()))
+	// todo: extract fee
+
+
+	fmt.Println("============ SWAP ON RAYDIUM =============")
+	// create and mint token
+	// get token amount out
+	// assume amount out 0
+	// swap token
+	ammProgramId := solana.MustPublicKeyFromBase58("9rpQHSyFVM1dkkHFQ2TtTzPEW7DVmEyPmN8wVniqJtuC")
+	swapAccounts := []*solana.AccountMeta{
+		solana.NewAccountMeta(signer.PublicKey(), false, true),
+		solana.NewAccountMeta(solana.TokenProgramID, false, false),
+		solana.NewAccountMeta(ammAcc, true, false),  // amm account
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("DhVpojXMTbZMuTaCgiiaFU7U8GvEEhnYo4G9BUdiEYGh"), false, false), // amm authority
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("HboQAt9BXyejnh6SzdDNTx4WELMtRRPCr7pRSLpAW7Eq"), true, false),  // amm open orders
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("6TzAjFPVZVMjbET8vUSk35J9U2dEWFCrnbHogsejRE5h"), true, false),  // amm target order
+		solana.NewAccountMeta(poolTokenAmm, true, false),  // pool_token_coin Amm
+		solana.NewAccountMeta(pcTokenAmm, true, false),  // pool_token_pc Amm
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("DESVgJVGajEgKGXhb6XmqDHGz3VjdgP7rEVESBgxmroY"), false, false), // serum dex
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("3tsrPhKrWHWMB8RiPaqNxJ8GnBhZnDqL4wcu5EAMFeBe"), true, false),  // serum market accounts
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("ANHHchetdZVZBuwKWgz8RSfVgCDsRpW9i2BNWrmG9Jh9"), true, false),  // bid account
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("ESSri17GNbVttqrp7hrjuXtxuTcCqytnrMkEqr29gMGr"), true, false),  // ask account
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("FGAW7QqNJGFyhakh5jPzGowSb8UqcSJ95ZmySeBgmVwt"), true, false),  // event q accounts
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("E1E5kQqWXkXbaqVzpY5P2EQUSi8PNAHdCnqsj3mPWSjG"), true, false),  // coin vault
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("3sj6Dsw8fr8MseXpCnvuCSczR8mQjCWNyWDC5cAfEuTq"), true, false),  // pc vault
+		solana.NewAccountMeta(solana.MustPublicKeyFromBase58("C2fDkZJqHH5PXyQ7UWBNZsmu6vDXxrEbb9Ex9KF7XsAE"), false, false), // vault signer account
+		solana.NewAccountMeta(signerSellToken, true, false),                                                                 // source token acc
+		solana.NewAccountMeta(signerBuyToken, true, false),                                                                  // dest token acc
+		solana.NewAccountMeta(signerTokenAuthority, false, false),                                                           // user owner
+		solana.NewAccountMeta(ammProgramId, false, false),                                                                   // user owner
+	}
+
+	// swapbasein
+	tag := byte(9)
+
+	amountInBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(amountInBytes, 1e8)
+
+	amountOutBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(amountOutBytes, 0)
+	swapData := append([]byte{tag}, amountInBytes...)
+	swapData = append(swapData, amountOutBytes...)
+	data := append([]byte{0x3}, []byte{byte(len(swapData))}...)
+	data = append(data, swapData...)
+	data = append(data, []byte{byte(len(swapAccounts) - 2)}...)
+	data = append(data, []byte{byte(17)}...)
+	fmt.Printf("data %v\n", data)
+	txSwap, err := solana.NewTransaction(
 		[]solana.Instruction{
-			unshield.Build(),
+			solana.NewInstruction(
+				program,
+				swapAccounts,
+				data,
+			),
 		},
 		recent.Value.Blockhash,
 		solana.TransactionPayer(feePayer.PublicKey()),
 	)
-	sig, err = SignAndSendTx(tx3, signers3, rpcClient)
+	if err != nil {
+		panic(err)
+	}
+
+	signersSwap := []solana.PrivateKey{
+		feePayer,
+		signer,
+	}
+
+	txSig, err := SignAndSendTx(txSwap, signersSwap, rpcClient)
 	if err != nil {
 		//panic(err)
+	}
+	spew.Dump(txSig)
+
+	fmt.Println("==============================================================================")
+	fmt.Println("==============================================================================")
+	fmt.Println("=============================== REQUEST WITHDRAW =============================")
+	fmt.Println("==============================================================================")
+
+	shieldAmount2 := uint64(1e5)
+	shieldAccounts2 := []*solana.AccountMeta{
+		solana.NewAccountMeta(signerBuyToken, true, false),
+		solana.NewAccountMeta(vaultBuyToken, true, false),
+		solana.NewAccountMeta(incognitoProxy, false, false),
+		solana.NewAccountMeta(signer.PublicKey(), false, true),
+		solana.NewAccountMeta(signerTokenAuthority, false, false),
+		solana.NewAccountMeta(solana.TokenProgramID, false, false),
+	}
+	signersShield := []solana.PrivateKey{
+		feePayer,
+		signer,
+	}
+
+	shieldInstruction2 := shield.NewShield(
+		incAddress,
+		shieldAmount2,
+		program,
+		shieldAccounts2,
+		byte(5),
+	)
+	shieldInsGenesis2 := shieldInstruction2.Build()
+	if shieldInsGenesis == nil {
+		panic("Build inst got error")
+	}
+	tx, err = solana.NewTransaction(
+		[]solana.Instruction{
+			shieldInsGenesis2,
+		},
+		recent.Value.Blockhash,
+		solana.TransactionPayer(feePayer.PublicKey()),
+	)
+	if err != nil {
+		panic(err)
+	}
+	sig, err = SignAndSendTx(tx, signersShield, rpcClient)
+	if err != nil {
+		panic(err)
 	}
 	spew.Dump(sig)
 
@@ -282,6 +498,7 @@ func main() {
 		solAmount,
 		program,
 		shieldAccounts4,
+		byte(0),
 	)
 
 	// build sync native token program

@@ -12,6 +12,7 @@ use crate::error::BridgeError::{
 use crate::state::{
     UnshieldRequest,
     IncognitoProxy,
+    DappRequest,
 };
 use std::{convert::TryInto, mem::size_of};
 use crate::error::BridgeError;
@@ -36,6 +37,25 @@ pub enum BridgeInstruction {
         /// beacon info
         init_beacon_info: IncognitoProxy,
     },
+
+    ///// dapp interaction
+    DappInteraction {
+        /// beacon info
+        dapp_request: DappRequest,
+    },
+
+    ///// submit burn proof from incognito chain
+    SubmitBurnProof {
+        /// burn proof info
+        burn_proof: UnshieldRequest,
+    },
+
+    ///// withdraw request
+    WithdrawRequest {
+        /// withdraw request
+        amount: u64,
+        inc_address: [u8; 148],
+    },
 }
 
 impl BridgeInstruction {
@@ -43,15 +63,22 @@ impl BridgeInstruction {
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         let (tag, rest) = input.split_first().ok_or(InvalidInstruction)?;
         Ok(match tag {
-            0 => {
+            0 | 5 => {
                 let (amount, rest) = Self::unpack_u64(rest)?;
                 let (inc_address, _) = Self::unpack_bytes148(rest)?;
-                Self::Shield {
-                    amount,
-                    inc_address: inc_address.clone()
+                if *tag == 0 {
+                    Self::Shield {
+                        amount,
+                        inc_address: inc_address.clone()
+                    }
+                } else {
+                    Self::WithdrawRequest {
+                        amount,
+                        inc_address: inc_address.clone()
+                    }
                 }
             },
-            1 => {
+            1 | 4 => {
                 let (inst, rest) =  Self::unpack_bytes162(rest)?;
                 let (height, rest) = Self::unpack_u64(rest)?;
                 let (inst_paths_len,mut rest) = Self::unpack_u8(rest)?;
@@ -84,16 +111,24 @@ impl BridgeInstruction {
                     rest = rest_;
                     signatures.push(*signature);
                 }
-                Self::UnShield {
-                    unshield_info: UnshieldRequest {
-                        inst: *inst,
-                        height,
-                        inst_paths,
-                        inst_path_is_lefts,
-                        inst_root: *inst_root,
-                        blk_data: *blk_data,
-                        indexes,
-                        signatures,
+
+                let incognito_proof = UnshieldRequest {
+                    inst: *inst,
+                    height,
+                    inst_paths,
+                    inst_path_is_lefts,
+                    inst_root: *inst_root,
+                    blk_data: *blk_data,
+                    indexes,
+                    signatures,
+                };
+                if *tag == 4 {
+                    Self::SubmitBurnProof {
+                        burn_proof: incognito_proof,
+                    }
+                } else {
+                    Self::UnShield {
+                        unshield_info: incognito_proof,
                     }
                 }
             },
@@ -115,6 +150,19 @@ impl BridgeInstruction {
                         vault: vault_key,
                         beacons
                     }   
+                }
+            },
+            3 => {
+                let (inst_len, rest) = Self::unpack_u8(rest)?; // todo upgrade inst length
+                let (inst_data, rest) = Self::unpack_nbytes(rest, inst_len)?;
+                let (acc_len, rest) = Self::unpack_u8(rest)?;
+                let (sign_index, _) = Self::unpack_u8(rest)?;
+                Self::DappInteraction {
+                    dapp_request: DappRequest {
+                        inst: inst_data.to_vec(),
+                        num_acc: acc_len,
+                        sign_index
+                    }
                 }
             }
             _ => return Err(InvalidInstruction.into()),
@@ -240,6 +288,15 @@ impl BridgeInstruction {
         let (key, rest) = input.split_at(PUBKEY_BYTES);
         let pk = Pubkey::new(key);
         Ok((pk, rest))
+    }
+
+    fn unpack_nbytes(input: &[u8], n: u8) -> Result<(&[u8], &[u8]), ProgramError> {
+        if input.len() < n as usize {
+            msg!("Pubkey cannot be unpacked");
+            return Err(InstructionUnpackError.into());
+        }
+        let (key, rest) = input.split_at(n as usize);
+        Ok((key, rest))
     }
 
     pub fn pack(&self) -> Vec<u8> {
