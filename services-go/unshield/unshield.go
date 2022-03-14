@@ -14,7 +14,6 @@ import (
 )
 
 const UNSHIELD_TAG = 0x1
-const SUBMIT_PROOF = 0x4
 
 type decodedProof struct {
 	Instruction []byte
@@ -64,9 +63,9 @@ func (us *Unshield) Build() *solana.GenericInstruction {
 
 	// build unshield instruction
 	tag := UNSHIELD_TAG
-	if us.getProofMethod != "getsolburnproof" {
-		tag = SUBMIT_PROOF
-	}
+	//if us.getProofMethod != "getsolburnproof" {
+	//	tag = SUBMIT_PROOF
+	//}
 	temp := append([]byte{byte(tag)}, proof.Instruction...)
 	heightBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(heightBytes, proof.Heights[0].Uint64())

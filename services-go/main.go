@@ -13,6 +13,7 @@ import (
 	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/thachtb/solana-bridge/services-go/Shield"
 	unshield2 "github.com/thachtb/solana-bridge/services-go/unshield"
+	"math/big"
 	"strings"
 )
 
@@ -139,7 +140,6 @@ func main() {
 	).Build()
 
 	fmt.Println("============ TEST SHIELD TOKEN ACCOUNT =============")
-
 	incAddress := "12shR6fDe7ZcprYn6rjLwiLcL7oJRiek66ozzYu3B3rBxYXkqJeZYj6ZWeYy4qR4UHgaztdGYQ9TgHEueRXN7VExNRGB5t4auo3jTgXVBiLJmnTL5LzqmTXezhwmQvyrRjCbED5xW7yMMeeWarKa"
 	shieldAmount := uint64(1e8)
 	shieldAccounts := []*solana.AccountMeta{
@@ -183,7 +183,6 @@ func main() {
 		panic(err)
 	}
 	spew.Dump(sig)
-	return
 
 	fmt.Println("============ TEST UNSHIELD TOKEN ACCOUNT =============")
 	txBurn2 := "860e3d8a207872c430304bdd44dfe920c62b518dff2a802e0afe04ef997f2cbd"
@@ -252,14 +251,27 @@ func main() {
 	}
 	sig, err = SignAndSendTx(tx3, signers3, rpcClient)
 	if err != nil {
-		panic(err)
+		//panic(err)
 	}
 	spew.Dump(sig)
+
+	fmt.Println("============ TEST SUBMIT BURN PROOF =============")
+	burnProofdAccounts := []*solana.AccountMeta{
+		solana.NewAccountMeta(vaultAssTokenAcc, true, false),
+		solana.NewAccountMeta(signerTokenAuthority, false, false),
+		solana.NewAccountMeta(vaultTokenAuthority, false, false),
+		solana.NewAccountMeta(vaultAcc, true, false),
+		solana.NewAccountMeta(incognitoProxy, false, false),
+		solana.NewAccountMeta(solana.TokenProgramID, false, false),
+		solana.NewAccountMeta(signerSellToken, true, false),
+	}
+	fmt.Println(burnProofdAccounts)
 
 	fmt.Println("============ GET RAYDIUM SWAP RATE =============")
 	ammAcc := solana.MustPublicKeyFromBase58("HeD1cekRWUNR25dcvW8c9bAHeKbr1r7qKEhv7pEegr4f")
 	poolTokenAmm := solana.MustPublicKeyFromBase58("3qbeXHwh9Sz4zabJxbxvYGJc57DZHrFgYMCWnaeNJENT")
 	pcTokenAmm := solana.MustPublicKeyFromBase58("FrGPG5D4JZVF5ger7xSChFVFL8M9kACJckzyCz8tVowz")
+	swapAmount := uint64(1e8)
 	poolTokenBal, err := rpcClient.GetTokenAccountBalance(context.Background(), poolTokenAmm, rpc.CommitmentConfirmed)
 	if err != nil {
 		panic(err)
@@ -280,9 +292,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(len(resp.Value.Data.GetBinary()))
-	// todo: extract fee
-
+	ammData := resp.Value.Data.GetBinary()
+	swap_fee_numerator := ammData[22 * 8: 23 * 8]
+	swap_fee_denominator := ammData[23 * 8: 24 * 8]
+	swapFeeNum := binary.LittleEndian.Uint64(swap_fee_numerator)
+	swapFeeDe := binary.LittleEndian.Uint64(swap_fee_denominator)
+	// hardcode fee 0.3%
+	fromAmountWithFee := new(big.Int).SetUint64(swapAmount * (swapFeeDe - swapFeeNum) / swapFeeDe)
+	poolAmountBig, _ := new(big.Int).SetString(poolTokenBal.Value.Amount, 10)
+	pcAmountBig, _ :=  new(big.Int).SetString(pcTokenBal.Value.Amount, 10)
+	denominator := 	big.NewInt(0).Add(fromAmountWithFee, poolAmountBig)
+	temp := big.NewInt(0).Mul(fromAmountWithFee, pcAmountBig)
+	amountOut := big.NewInt(0).Div(temp, denominator).Uint64()
+	fmt.Printf("Amount out: %v \n", amountOut)
 
 	fmt.Println("============ SWAP ON RAYDIUM =============")
 	// create and mint token
@@ -317,10 +339,10 @@ func main() {
 	tag := byte(9)
 
 	amountInBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(amountInBytes, 1e8)
+	binary.LittleEndian.PutUint64(amountInBytes, swapAmount)
 
 	amountOutBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(amountOutBytes, 0)
+	binary.LittleEndian.PutUint64(amountOutBytes, amountOut)
 	swapData := append([]byte{tag}, amountInBytes...)
 	swapData = append(swapData, amountOutBytes...)
 	data := append([]byte{0x3}, []byte{byte(len(swapData))}...)
@@ -378,7 +400,7 @@ func main() {
 		shieldAmount2,
 		program,
 		shieldAccounts2,
-		byte(5),
+		byte(4),
 	)
 	shieldInsGenesis2 := shieldInstruction2.Build()
 	if shieldInsGenesis == nil {
