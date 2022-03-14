@@ -19,9 +19,8 @@ use std::{
 use borsh::{BorshSerialize, BorshDeserialize};
 use spl_token::state::Account as TokenAccount;
 use arrayref::{array_refs, array_ref};
-use solana_program::serialize_utils::read_u8;
 use crate::{error::BridgeError, instruction::BridgeInstruction, state::{UnshieldRequest, IncognitoProxy, Vault}};
-use crate::state::{Dapp, DappRequest};
+use crate::state::{DappRequest};
 use spl_associated_token_account::{get_associated_token_address};
 
 const LEN: usize = 1 + 1 + 32 + 32 + 32 + 32; // ignore last 32 bytes in instruction
@@ -428,39 +427,39 @@ fn process_submit_burn_proof(
     // Get double block hash from instRoot and other data
     let blk = hash(&hash(&blk_data_bytes[..]).to_bytes());
 
-    // for i in 0..burn_proof.indexes.len() {
-    //     let s_r_v = burn_proof.signatures[i];
-    //     let (s_r, v) = s_r_v.split_at(64);
-    //     if v.len() != 1 {
-    //         msg!("Invalid signature v input");
-    //         return Err(BridgeError::InvalidBeaconSignature.into());
-    //     }
-    //     let beacon_key_from_signature_result = secp256k1_recover(
-    //         &blk.to_bytes()[..],
-    //         v[0],
-    //         s_r,
-    //     ).unwrap();
-    //     let index_beacon = burn_proof.indexes[i];
-    //     let beacon_key = incognito_proxy_info.beacons[index_beacon as usize];
-    //     if beacon_key_from_signature_result != beacon_key {
-    //         return Err(BridgeError::InvalidBeaconSignature.into());
-    //     }
-    // }
+    for i in 0..burn_proof.indexes.len() {
+        let s_r_v = burn_proof.signatures[i];
+        let (s_r, v) = s_r_v.split_at(64);
+        if v.len() != 1 {
+            msg!("Invalid signature v input");
+            return Err(BridgeError::InvalidBeaconSignature.into());
+        }
+        let beacon_key_from_signature_result = secp256k1_recover(
+            &blk.to_bytes()[..],
+            v[0],
+            s_r,
+        ).unwrap();
+        let index_beacon = burn_proof.indexes[i];
+        let beacon_key = incognito_proxy_info.beacons[index_beacon as usize];
+        if beacon_key_from_signature_result != beacon_key {
+            return Err(BridgeError::InvalidBeaconSignature.into());
+        }
+    }
 
     // append block height to instruction
     let height_vec = append_at_top(burn_proof.height);
     let mut inst_vec = inst.to_vec();
     inst_vec.extend_from_slice(&height_vec);
     let inst_hash = hash(&inst_vec[..]);
-    // if !instruction_in_merkle_tree(
-    //     &inst_hash.to_bytes(),
-    //     &burn_proof.inst_root,
-    //     &burn_proof.inst_paths,
-    //     &burn_proof.inst_path_is_lefts
-    // ) {
-    //     msg!("Invalid instruction root");
-    //     return Err(BridgeError::InvalidBeaconMerkleTree.into());
-    // }
+    if !instruction_in_merkle_tree(
+        &inst_hash.to_bytes(),
+        &burn_proof.inst_root,
+        &burn_proof.inst_paths,
+        &burn_proof.inst_path_is_lefts
+    ) {
+        msg!("Invalid instruction root");
+        return Err(BridgeError::InvalidBeaconMerkleTree.into());
+    }
 
     // prepare to transfer token to user
     let authority_signer_seeds = &[
