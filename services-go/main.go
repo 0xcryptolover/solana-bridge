@@ -171,7 +171,7 @@ func main() {
 			newVaultSellTokenInst,
 			newVaultBuyTokenInst,
 			shieldInsGenesis,
-		},
+		}[4:],
 		recent.Value.Blockhash,
 		solana.TransactionPayer(feePayer.PublicKey()),
 	)
@@ -180,9 +180,10 @@ func main() {
 	}
 	sig, err := SignAndSendTx(tx, signers, rpcClient)
 	if err != nil {
-		//panic(err)
+		panic(err)
 	}
 	spew.Dump(sig)
+	return
 
 	fmt.Println("============ TEST UNSHIELD TOKEN ACCOUNT =============")
 	txBurn2 := "860e3d8a207872c430304bdd44dfe920c62b518dff2a802e0afe04ef997f2cbd"
