@@ -542,12 +542,12 @@ func main() {
 
 	unshieldAccounts5 := []*solana.AccountMeta{
 		solana.NewAccountMeta(vaultNativeTokenAcc, true, false),
-		solana.NewAccountMeta(nativeAccountToken.PublicKey(), true, false),
+		solana.NewAccountMeta(testPubKey.PublicKey(), true, false),
 		solana.NewAccountMeta(vaultTokenAuthority, false, false),
 		solana.NewAccountMeta(vaultAcc, true, false),
 		solana.NewAccountMeta(incognitoProxy, false, false),
 		solana.NewAccountMeta(solana.TokenProgramID, false, false),
-		solana.NewAccountMeta(testPubKey.PublicKey(), true, false),
+		solana.NewAccountMeta(nativeAccountToken.PublicKey(), true, false),
 	}
 
 	signers5 := []solana.PrivateKey{
