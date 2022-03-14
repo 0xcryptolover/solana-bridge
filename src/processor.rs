@@ -85,28 +85,11 @@ fn process_shield(
         msg!("Vault token account must be owned by spl token");
         return Err(ProgramError::IncorrectProgramId);
     }
-    let vault_token_account_info = TokenAccount::unpack(&vault_token_account.try_borrow_data()?)?;
-    let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
-    let authority_signer_seeds = &[
-        incognito_proxy.key.as_ref(),
-        &[incognito_proxy_info.bump_seed],
-    ];
-    let vault_authority_pubkey =
-        Pubkey::create_program_address(authority_signer_seeds, program_id)?;
 
-    let incognio_proxy_associated_acc = get_associated_token_address(
-        &vault_authority_pubkey,
-        &vault_token_account_info.mint
-    );
-    if incognio_proxy_associated_acc != *vault_token_account.key {
-        msg!("Only send to incognito proxy account will be accepted");
-        return Err(ProgramError::IncorrectProgramId);
-    }
-
-    if vault_token_account_info.owner != vault_authority_pubkey {
-        msg!("Send to wrong vault token account");
-        return Err(ProgramError::IncorrectProgramId);
-    }
+    let token_id = _verify_vault_token_account(
+        incognito_proxy.clone(),
+        vault_token_account.clone(),
+        program_id.clone())?;
 
     spl_token_transfer(TokenTransferParams {
         source: shield_maker_token_account.clone(),
@@ -117,7 +100,7 @@ fn process_shield(
         token_program: token_program.clone(),
     })?;
 
-    msg!("Issue pToken to incognitoproxy,address,token,amount:{},{},{},{}", incognito_proxy.key,str::from_utf8(&inc_address[..]).unwrap(), vault_token_account_info.mint, amount);
+    msg!("Issue pToken to incognitoproxy,address,token,amount:{},{},{},{}", incognito_proxy.key,str::from_utf8(&inc_address[..]).unwrap(), token_id, amount);
 
     Ok(())
 
@@ -198,9 +181,13 @@ fn process_unshield(
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
 
-    let unshield_account_info = TokenAccount::unpack(&unshield_token_account.try_borrow_data()?)?;
-    if token_key != unshield_account_info.mint {
-        msg!("Token key and key provided not match {}, {}", token_key, unshield_account_info.mint);
+    // verify vault token account
+    let token_id = _verify_vault_token_account(
+        incognito_proxy.clone(),
+        vault_token_account.clone(),
+        program_id.clone())?;
+    if token_key != token_id {
+        msg!("Token key and key provided not match {}, {}", token_key, token_id);
         return Err(BridgeError::InvalidKeysInInstruction.into());
     }
 
@@ -496,24 +483,12 @@ fn process_withdraw_request(
     }
     let signer_authority_token = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
-    let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
-    let authority_signer_seeds = &[
-        incognito_proxy.key.as_ref(),
-        &[incognito_proxy_info.bump_seed],
-    ];
-    let vault_token_account_info = TokenAccount::unpack(&vault_token_account.try_borrow_data()?)?;
-    let vault_authority_pubkey =
-        Pubkey::create_program_address(authority_signer_seeds, program_id)?;
 
-    let incognio_proxy_associated_acc = get_associated_token_address(
-        &vault_authority_pubkey,
-        &vault_token_account_info.mint
-    );
-
-    if incognio_proxy_associated_acc != *vault_token_account.key {
-        msg!("Only send to incognito proxy account will be accepted");
-        return Err(ProgramError::IncorrectProgramId);
-    }
+    // verify vault token account
+    let token_id = _verify_vault_token_account(
+        incognito_proxy.clone(),
+        vault_token_account.clone(),
+        program_id.clone())?;
 
     let (pda, bump) = Pubkey::find_program_address(
         &[signer.key.as_ref()],
@@ -538,7 +513,7 @@ fn process_withdraw_request(
         token_program: token_program.clone(),
     })?;
 
-    msg!("Issue pToken to incognitoproxy,address,token,amount:{},{},{},{}", incognito_proxy.key,str::from_utf8(&inc_address[..]).unwrap(), vault_token_account_info.mint, amount);
+    msg!("Issue pToken to incognitoproxy,address,token,amount:{},{},{},{}", incognito_proxy.key,str::from_utf8(&inc_address[..]).unwrap(), token_id, amount);
 
     Ok(())
 }
@@ -626,6 +601,29 @@ fn _process_insert_entry(vault: &AccountInfo, program_id: &Pubkey, txid: &[u8; 3
     map_state.serialize(&mut &mut vault.data.borrow_mut()[..])?;
 
     Ok(())
+}
+
+fn _verify_vault_token_account(incognito_proxy: AccountInfo, vault_token_account: AccountInfo, program_id: Pubkey) -> Result<Pubkey, ProgramError> {
+    let vault_token_account_info = TokenAccount::unpack(&vault_token_account.try_borrow_data()?)?;
+    let incognito_proxy_info = IncognitoProxy::unpack(&incognito_proxy.try_borrow_data()?)?;
+    let authority_signer_seeds = &[
+        incognito_proxy.key.as_ref(),
+        &[incognito_proxy_info.bump_seed],
+    ];
+    let vault_authority_pubkey =
+        Pubkey::create_program_address(authority_signer_seeds, &program_id)?;
+
+    let incognio_proxy_associated_acc = get_associated_token_address(
+        &vault_authority_pubkey,
+        &vault_token_account_info.mint
+    );
+
+    if incognio_proxy_associated_acc != *vault_token_account.key {
+        msg!("Only incognito proxy account will be accepted");
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    Ok((vault_token_account_info.mint))
 }
 
 // check rent exempt
