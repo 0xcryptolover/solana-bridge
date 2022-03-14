@@ -18,9 +18,9 @@ import (
 
 const SHIELD = "Shield"
 const UNSHIELD = "Unshield"
-const INCOGNITO_PROXY = "CdMrUyMmTqrEVKKFnEEvhsaFLAc4H8uAjmFgzQdBjy4m"
-const PROGRAM_ID = "EaDziH5DPfTWNSWaS47e14fksE2ZUYzzqmzPoSGNQLmb"
-const VAULT_ACC = "yptzBmz3jfYPB1jEcAajPFU8zvvv5xhKhDsSEMHuW2L"
+const INCOGNITO_PROXY = "5Tq3wvYAD6hRonCiUx62k37gELxxEABSYCkaqrSP3ztv"
+const PROGRAM_ID = "BKGhwbiTHdUxcuWzZtDWyioRBieDEXTtgEk8u1zskZnk"
+const VAULT_ACC = "G65gJS4feG1KXpfDXiySUGT7c6QosCJcGa4nUZsF55Du"
 const SYNC_NATIVE_TAG = 0x11
 const NEW_TOKEN_ACC = 0x1
 const ACCCOUN_SIZE = 165
@@ -186,6 +186,22 @@ func main() {
 
 	fmt.Println("============ TEST UNSHIELD TOKEN ACCOUNT =============")
 	txBurn2 := "860e3d8a207872c430304bdd44dfe920c62b518dff2a802e0afe04ef997f2cbd"
+	tokenUnshield := solana.MustPublicKeyFromBase58("EHheP6Wfyz65ve258TYQcfBHAAY4LsErnmXZozrgfvGr")
+	unshieldMakerRequest := solana.MustPublicKeyFromBase58("GQcYV3Y9VXLD7HWY5bUf3JGyXYmGg1bMgs4nMMVKKBLE")
+	unshielMakerAssTokenAcc, _, err := solana.FindAssociatedTokenAddress(unshieldMakerRequest, tokenUnshield)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(unshielMakerAssTokenAcc.String())
+
+	vaultAssTokenAcc, _, err := solana.FindAssociatedTokenAddress(vaultTokenAuthority, tokenUnshield)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(vaultAssTokenAcc.String())
+
+	unshieldInst := []solana.Instruction{}
 	signers3 := []solana.PrivateKey{
 		feePayer,
 	}
@@ -193,12 +209,28 @@ func main() {
 	fmt.Println(signerSellToken.Bytes())
 
 	unshieldAccounts := []*solana.AccountMeta{
-		solana.NewAccountMeta(vaultSellToken, true, false),
-		solana.NewAccountMeta(signerSellToken, true, false),
+		solana.NewAccountMeta(vaultAssTokenAcc, true, false),
+		solana.NewAccountMeta(unshieldMakerRequest, false, false),
 		solana.NewAccountMeta(vaultTokenAuthority, false, false),
 		solana.NewAccountMeta(vaultAcc, true, false),
 		solana.NewAccountMeta(incognitoProxy, false, false),
 		solana.NewAccountMeta(solana.TokenProgramID, false, false),
+		solana.NewAccountMeta(unshielMakerAssTokenAcc, true, false),
+	}
+
+	_, err = rpcClient.GetAccountInfo(context.TODO(), unshielMakerAssTokenAcc)
+	if err != nil {
+		if err.Error() == "not found" {
+			// init account
+			newUnshieldTokenAcc := associatedtokenaccount.NewCreateInstruction(
+				feePayer.PublicKey(),
+				unshieldMakerRequest,
+				tokenUnshield,
+			).Build()
+			unshieldInst = append(unshieldInst, newUnshieldTokenAcc)
+		} else {
+			panic(err)
+		}
 	}
 
 	unshield := unshield2.NewUnshield(
@@ -208,10 +240,9 @@ func main() {
 		program,
 		unshieldAccounts,
 	)
+	unshieldInst = append(unshieldInst, unshield.Build())
 	tx3, err := solana.NewTransaction(
-		[]solana.Instruction{
-			unshield.Build(),
-		},
+		unshieldInst,
 		recent.Value.Blockhash,
 		solana.TransactionPayer(feePayer.PublicKey()),
 	)
